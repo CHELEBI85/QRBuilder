@@ -1,20 +1,30 @@
+import 'react-native-gesture-handler';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import AppNavigator from './src/navigation/AppNavigator';
 
-export default function App() {
+function Root() {
+  const { isDark } = useTheme();
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <AppNavigator />
+      <StatusBar
+        style={isDark ? 'light' : 'dark'}
+        translucent
+        backgroundColor="transparent"
+      />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <Root />
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
