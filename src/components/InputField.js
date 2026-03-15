@@ -11,20 +11,21 @@ export default function InputField({
   secureTextEntry = false,
   multiline = false,
   autoCapitalize = 'sentences',
+  hasError = false,
 }) {
   const { theme } = useTheme();
 
   return (
     <View style={styles.wrapper}>
       {label ? (
-        <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>
+        <Text style={[styles.label, { color: hasError ? theme.error : theme.textSecondary }]}>{label}</Text>
       ) : null}
       <TextInput
         style={[
           styles.input,
           {
             backgroundColor: theme.inputBackground,
-            borderColor: theme.border,
+            borderColor: hasError ? theme.error : theme.border,
             color: theme.text,
           },
           multiline && styles.multiline,

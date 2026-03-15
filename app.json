@@ -13,12 +13,16 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.qrbuilder.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "QR kodlarını galeriye kaydetmek ve logo eklemek için galeri erişimi gerekiyor.",
-        "NSPhotoLibraryAddUsageDescription": "QR kodlarını galeriye kaydetmek için erişim gerekiyor."
+        "NSPhotoLibraryAddUsageDescription": "QR kodlarını galeriye kaydetmek için erişim gerekiyor.",
+        "NSCameraUsageDescription": "QR kodlarını okumak için kamera erişimi gerekiyor.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.qrbuilder.app",
       "adaptiveIcon": {
         "backgroundColor": "#0F0F1A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -28,7 +32,13 @@
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -49,7 +59,18 @@
           "photosPermission": "QR koduna logo eklemek için galeri erişimi gerekiyor."
         }
       ],
-      "expo-sharing"
-    ]
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "QR kodlarını okumak için kamera erişimi gerekiyor."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3086e76c-4833-4bf6-b8d2-3b01e627396f"
+      }
+    }
   }
 }

@@ -4,6 +4,7 @@ export const QR_TYPES = [
   {
     id: 'url',
     label: 'URL',
+    premium: false,
     icon: { lib: 'MaterialIcons', name: 'language', color: '#4285F4' },
     description: 'Web sitesi linki',
     fields: [
@@ -13,6 +14,7 @@ export const QR_TYPES = [
   {
     id: 'text',
     label: 'Metin',
+    premium: false,
     icon: { lib: 'MaterialIcons', name: 'notes', color: '#607D8B' },
     description: 'Serbest metin',
     fields: [
@@ -22,6 +24,7 @@ export const QR_TYPES = [
   {
     id: 'email',
     label: 'Email',
+    premium: true,
     icon: { lib: 'MaterialIcons', name: 'email', color: '#EA4335' },
     description: 'Email adresi',
     fields: [
@@ -33,6 +36,7 @@ export const QR_TYPES = [
   {
     id: 'phone',
     label: 'Telefon',
+    premium: true,
     icon: { lib: 'MaterialIcons', name: 'phone', color: '#34A853' },
     description: 'Telefon numarası',
     fields: [
@@ -42,6 +46,7 @@ export const QR_TYPES = [
   {
     id: 'sms',
     label: 'SMS',
+    premium: true,
     icon: { lib: 'MaterialIcons', name: 'message', color: '#2196F3' },
     description: 'SMS mesajı',
     fields: [
@@ -52,6 +57,7 @@ export const QR_TYPES = [
   {
     id: 'wifi',
     label: 'WiFi',
+    premium: true,
     icon: { lib: 'MaterialIcons', name: 'wifi', color: '#00BCD4' },
     description: 'WiFi ağı',
     fields: [
@@ -69,6 +75,7 @@ export const QR_TYPES = [
   {
     id: 'vcard',
     label: 'Kişi',
+    premium: true,
     icon: { lib: 'MaterialIcons', name: 'contact-page', color: '#FF9800' },
     description: 'vCard kişi bilgisi',
     fields: [
@@ -83,6 +90,7 @@ export const QR_TYPES = [
   {
     id: 'whatsapp',
     label: 'WhatsApp',
+    premium: true,
     icon: { lib: 'FontAwesome5', name: 'whatsapp', color: '#25D366', brand: true },
     description: 'WhatsApp mesajı',
     fields: [
@@ -93,6 +101,7 @@ export const QR_TYPES = [
   {
     id: 'instagram',
     label: 'Instagram',
+    premium: true,
     icon: { lib: 'FontAwesome5', name: 'instagram', color: '#E1306C', brand: true },
     description: 'Instagram profili',
     fields: [
@@ -102,6 +111,7 @@ export const QR_TYPES = [
   {
     id: 'twitter',
     label: 'X (Twitter)',
+    premium: true,
     icon: { lib: 'text', name: '𝕏', color: '#000000' },
     description: 'X / Twitter profili',
     fields: [
@@ -111,6 +121,7 @@ export const QR_TYPES = [
   {
     id: 'youtube',
     label: 'YouTube',
+    premium: true,
     icon: { lib: 'FontAwesome5', name: 'youtube', color: '#FF0000', brand: true },
     description: 'YouTube kanalı',
     fields: [
@@ -120,6 +131,7 @@ export const QR_TYPES = [
   {
     id: 'gps',
     label: 'Konum',
+    premium: true,
     icon: { lib: 'MaterialIcons', name: 'location-on', color: '#F44336' },
     description: 'GPS koordinatı',
     fields: [

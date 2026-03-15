@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const PRESETS = ['#000000', '#FFFFFF', '#6C63FF', '#FF6B6B', '#4ECDC4', '#FFD93D'];
@@ -17,7 +17,7 @@ export default function ColorSwatchRow({ label, selected, onSelect, onCustom }) 
             style={[
               styles.swatch,
               { backgroundColor: color, borderColor: theme.border },
-              selected === color && styles.selected,
+              selected === color && { borderWidth: 3, borderColor: theme.accent },
             ]}
             onPress={() => onSelect(color)}
             activeOpacity={0.8}
@@ -58,10 +58,6 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 8,
     borderWidth: 1,
-  },
-  selected: {
-    borderWidth: 3,
-    borderColor: '#6C63FF',
   },
   customBtn: {
     width: 32,

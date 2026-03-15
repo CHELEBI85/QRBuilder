@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,24 +13,35 @@ import { useTheme } from '../context/ThemeContext';
 import InputField from '../components/InputField';
 import QRIcon from '../components/QRIcon';
 import { formatQRData } from '../utils/qrFormatter';
-
-const SECURITY_OPTIONS = ['WPA', 'WEP', 'nopass'];
+import { validateQRForm } from '../utils/validators';
 
 export default function CreateScreen({ route, navigation }) {
   const { qrType } = route.params;
   const { theme } = useTheme();
   const [formData, setFormData] = useState({});
+  const [errors, setErrors] = useState({});
+
+  // Her ekran ziyaretinde formu sıfırla
+  useEffect(() => {
+    setFormData({});
+    setErrors({});
+  }, [qrType.id]);
 
   const updateField = (key, value) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
+    // Alan düzeltilince hatasını temizle
+    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: null }));
   };
 
   const handleGenerate = () => {
-    const qrValue = formatQRData(qrType.id, formData);
-    if (!qrValue || qrValue.trim() === '') {
-      Alert.alert('Hata', 'Lütfen en az bir alan doldurun.');
+    const validationError = validateQRForm(qrType.id, formData);
+    if (validationError) {
+      setErrors({ [validationError.field]: validationError.message });
+      Alert.alert('Eksik veya Hatalı Bilgi', validationError.message);
       return;
     }
+    setErrors({});
+    const qrValue = formatQRData(qrType.id, formData);
     navigation.navigate('Preview', { qrType, formData, qrValue });
   };
 
@@ -47,20 +58,14 @@ export default function CreateScreen({ route, navigation }) {
                 style={[
                   styles.pickerOption,
                   {
-                    backgroundColor:
-                      current === opt ? theme.accent : theme.inputBackground,
+                    backgroundColor: current === opt ? theme.accent : theme.inputBackground,
                     borderColor: current === opt ? theme.accent : theme.border,
                   },
                 ]}
                 onPress={() => updateField(field.key, opt)}
                 activeOpacity={0.8}
               >
-                <Text
-                  style={[
-                    styles.pickerOptionText,
-                    { color: current === opt ? '#FFFFFF' : theme.text },
-                  ]}
-                >
+                <Text style={[styles.pickerOptionText, { color: current === opt ? '#FFFFFF' : theme.text }]}>
                   {opt}
                 </Text>
               </TouchableOpacity>
@@ -71,17 +76,22 @@ export default function CreateScreen({ route, navigation }) {
     }
 
     return (
-      <InputField
-        key={field.key}
-        label={field.label}
-        value={formData[field.key] || ''}
-        onChangeText={(v) => updateField(field.key, v)}
-        placeholder={field.placeholder}
-        keyboardType={field.keyboardType}
-        secureTextEntry={field.secureTextEntry}
-        multiline={field.multiline}
-        autoCapitalize={field.multiline ? 'sentences' : 'none'}
-      />
+      <View key={field.key}>
+        <InputField
+          label={field.label}
+          value={formData[field.key] || ''}
+          onChangeText={(v) => updateField(field.key, v)}
+          placeholder={field.placeholder}
+          keyboardType={field.keyboardType}
+          secureTextEntry={field.secureTextEntry}
+          multiline={field.multiline}
+          autoCapitalize={field.multiline ? 'sentences' : 'none'}
+          hasError={!!errors[field.key]}
+        />
+        {errors[field.key] && (
+          <Text style={[styles.errorText, { color: theme.error }]}>⚠ {errors[field.key]}</Text>
+        )}
+      </View>
     );
   };
 
@@ -101,9 +111,7 @@ export default function CreateScreen({ route, navigation }) {
           </View>
           <View>
             <Text style={[styles.typeName, { color: theme.text }]}>{qrType.label}</Text>
-            <Text style={[styles.typeDesc, { color: theme.textSecondary }]}>
-              {qrType.description}
-            </Text>
+            <Text style={[styles.typeDesc, { color: theme.textSecondary }]}>{qrType.description}</Text>
           </View>
         </View>
 
@@ -124,13 +132,8 @@ export default function CreateScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scroll: {
-    padding: 20,
-    paddingBottom: 40,
-  },
+  container: { flex: 1 },
+  scroll: { padding: 20, paddingBottom: 40 },
   typeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,30 +150,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  typeName: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  typeDesc: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  form: {
-    marginBottom: 10,
-  },
-  pickerWrapper: {
-    marginBottom: 14,
-  },
-  pickerLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginLeft: 2,
-  },
-  pickerRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
+  typeName: { fontSize: 18, fontWeight: '700' },
+  typeDesc: { fontSize: 13, marginTop: 2 },
+  form: { marginBottom: 10 },
+  errorText: { fontSize: 12, marginTop: -10, marginBottom: 10, marginLeft: 4 },
+  pickerWrapper: { marginBottom: 14 },
+  pickerLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8, marginLeft: 2 },
+  pickerRow: { flexDirection: 'row', gap: 10 },
   pickerOption: {
     flex: 1,
     paddingVertical: 10,
@@ -178,19 +164,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
   },
-  pickerOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  pickerOptionText: { fontSize: 14, fontWeight: '600' },
   generateBtn: {
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
     marginTop: 8,
   },
-  generateBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  generateBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });

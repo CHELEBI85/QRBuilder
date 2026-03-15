@@ -2,17 +2,25 @@ import React from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { QR_TYPES } from '../constants/qrTypes';
 import QRTypeCard from '../components/QRTypeCard';
 
 export default function HomeScreen({ navigation }) {
   const { theme } = useTheme();
+  const { isPremium } = useSubscription();
+
+  const handleTypePress = (item) => {
+    const needsPremium = item.premium === true && !isPremium;
+    if (needsPremium) {
+      navigation.navigate('Paywall', { qrType: item });
+    } else {
+      navigation.navigate('Create', { qrType: item });
+    }
+  };
 
   const renderItem = ({ item }) => (
-    <QRTypeCard
-      item={item}
-      onPress={() => navigation.navigate('Create', { qrType: item })}
-    />
+    <QRTypeCard item={item} onPress={() => handleTypePress(item)} />
   );
 
   return (

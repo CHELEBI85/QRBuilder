@@ -10,7 +10,9 @@ import HomeScreen from '../screens/HomeScreen';
 import CreateScreen from '../screens/CreateScreen';
 import PreviewScreen from '../screens/PreviewScreen';
 import HistoryScreen from '../screens/HistoryScreen';
+import ScannerScreen from '../screens/ScannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import PaywallScreen from '../screens/PaywallScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -44,6 +46,11 @@ function CreateStack() {
         name="Preview"
         component={PreviewScreen}
         options={{ title: 'QR Önizleme', headerBackTitle: 'Geri' }}
+      />
+      <Stack.Screen
+        name="Paywall"
+        component={PaywallScreen}
+        options={{ title: 'Premium', headerBackTitle: 'Geri' }}
       />
     </Stack.Navigator>
   );
@@ -92,6 +99,16 @@ export default function AppNavigator() {
             tabBarLabel: 'Geçmiş',
             tabBarIcon: ({ color, size }) => (
               <MaterialIcons name="history" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="ScannerTab"
+          component={ScannerScreen}
+          options={{
+            tabBarLabel: 'Tara',
+            tabBarIcon: ({ color, size }) => (
+              <MaterialIcons name="qr-code-scanner" size={size} color={color} />
             ),
           }}
         />
