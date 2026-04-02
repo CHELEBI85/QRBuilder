@@ -14,6 +14,10 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import ScreenContainer from '../components/ScreenContainer';
+import AppText from '../components/AppText';
+import AppCard from '../components/AppCard';
+import LoadingState from '../components/LoadingState';
 
 export default function ScannerScreen() {
   const { theme } = useTheme();
@@ -32,18 +36,34 @@ export default function ScannerScreen() {
   const reset = () => {
     setScanned(false);
     setResult(null);
+    setTorchOn(false);
   };
 
-  const openLink = () => {
+  const openLink = async () => {
     if (!result) return;
-    const url = result.startsWith('http') ? result : `https://${result}`;
-    Linking.openURL(url).catch(() =>
-      Alert.alert('Hata', 'Bu bağlantı açılamadı.')
-    );
+    const raw = result.trim();
+    const url = raw.startsWith('http') ? raw : `https://${raw}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('Bağlantı açılamıyor', 'Bu adres cihazınızda açılamıyor.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Hata', 'Bu bağlantı açılamadı.');
+    }
   };
 
   const shareResult = () => {
+    if (!result) return;
     Share.share({ message: result });
+  };
+
+  const openAppSettings = () => {
+    Linking.openSettings().catch(() =>
+      Alert.alert('Ayarlara gidilemedi', 'Lütfen uygulama izinlerini sistem ayarlarından açın.')
+    );
   };
 
   const detectType = (value) => {
@@ -59,25 +79,52 @@ export default function ScannerScreen() {
     return { label: 'Metin', icon: '📝' };
   };
 
-  if (!permission) return <View style={{ flex: 1, backgroundColor: theme.background }} />;
+  if (permission === null) {
+    return (
+      <ScreenContainer scroll={false} edges={['top', 'left', 'right']} contentContainerStyle={styles.permissionLoading}>
+        <LoadingState message="Kamera izni kontrol ediliyor…" style={styles.loadingFill} />
+      </ScreenContainer>
+    );
+  }
 
   if (!permission.granted) {
+    const permanentlyDenied = permission.canAskAgain === false;
+
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.permissionBox}>
-          <Text style={{ fontSize: 64, marginBottom: 20 }}>📷</Text>
-          <Text style={[styles.permTitle, { color: theme.text }]}>Kamera İzni Gerekli</Text>
-          <Text style={[styles.permDesc, { color: theme.textSecondary }]}>
-            QR kodları okumak için kamera izni vermeniz gerekiyor.
+      <ScreenContainer scroll={false} edges={['top', 'left', 'right']} contentContainerStyle={styles.permissionLoading}>
+        <AppCard padding="lg" style={styles.permissionCard}>
+          <Text style={styles.permissionEmoji} accessible={false}>
+            {permanentlyDenied ? '🔒' : '📷'}
           </Text>
+          <AppText variant="title3" tone="primary" style={styles.permissionTitle}>
+            {permanentlyDenied ? 'Kamera erişimi kapalı' : 'Kamera izni gerekli'}
+          </AppText>
+          <AppText variant="subbody" tone="secondary" style={styles.permissionBody}>
+            {permanentlyDenied
+              ? 'QR kodu tarayabilmek için sistem ayarlarından bu uygulama için kamera iznini açın.'
+              : 'QR kodları okumak için kamera erişimine izin vermeniz gerekiyor. Verileriniz yalnızca cihazınızda işlenir.'}
+          </AppText>
           <TouchableOpacity
-            style={[styles.permBtn, { backgroundColor: theme.accent }]}
-            onPress={requestPermission}
+            style={[
+              styles.primaryBtn,
+              {
+                backgroundColor: theme.primary,
+                borderRadius: theme.radius.sm + 2,
+                paddingVertical: theme.spacing.md,
+                marginTop: theme.spacing.lg,
+              },
+            ]}
+            onPress={permanentlyDenied ? openAppSettings : requestPermission}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={permanentlyDenied ? 'Sistem ayarlarını aç' : 'Kamera izni iste'}
           >
-            <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>İzin Ver</Text>
+            <AppText variant="button" tone="onPrimary" style={styles.primaryBtnLabel}>
+              {permanentlyDenied ? 'Ayarlara git' : 'İzin ver'}
+            </AppText>
           </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        </AppCard>
+      </ScreenContainer>
     );
   }
 
@@ -86,13 +133,26 @@ export default function ScannerScreen() {
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>QR Tara</Text>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.lg, paddingBottom: theme.spacing.md }]}>
+        <AppText variant="title2" tone="primary" accessibilityRole="header">
+          QR Tara
+        </AppText>
         <TouchableOpacity
-          style={[styles.torchBtn, { backgroundColor: torchOn ? theme.accent : theme.card, borderColor: theme.border }]}
+          style={[
+            styles.torchBtn,
+            {
+              backgroundColor: torchOn ? theme.primary : theme.card,
+              borderColor: theme.border,
+              borderRadius: theme.radius.sm,
+            },
+          ]}
           onPress={() => setTorchOn((v) => !v)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={torchOn ? 'Flaşı kapat' : 'Flaşı aç'}
+          accessibilityState={{ selected: torchOn }}
         >
-          <MaterialIcons name={torchOn ? 'flash-on' : 'flash-off'} size={20} color={torchOn ? '#FFF' : theme.textSecondary} />
+          <MaterialIcons name={torchOn ? 'flash-on' : 'flash-off'} size={22} color={torchOn ? theme.textOnPrimary : theme.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -105,59 +165,113 @@ export default function ScannerScreen() {
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
             onBarcodeScanned={handleBarCodeScanned}
           />
-          {/* Tarama Çerçevesi */}
           <View style={styles.overlay} pointerEvents="none">
             <View style={styles.frame}>
-              <View style={[styles.corner, styles.cornerTL, { borderColor: theme.accent }]} />
-              <View style={[styles.corner, styles.cornerTR, { borderColor: theme.accent }]} />
-              <View style={[styles.corner, styles.cornerBL, { borderColor: theme.accent }]} />
-              <View style={[styles.corner, styles.cornerBR, { borderColor: theme.accent }]} />
+              <View style={[styles.corner, styles.cornerTL, { borderColor: theme.primary }]} />
+              <View style={[styles.corner, styles.cornerTR, { borderColor: theme.primary }]} />
+              <View style={[styles.corner, styles.cornerBL, { borderColor: theme.primary }]} />
+              <View style={[styles.corner, styles.cornerBR, { borderColor: theme.primary }]} />
             </View>
           </View>
-          <Text style={styles.scanHint}>QR kodu çerçeve içine hizalayın</Text>
+          <View style={[styles.scanHintPill, { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: theme.radius.pill }]}>
+            <AppText variant="subbody" tone="onPrimary" style={styles.scanHintText}>
+              QR kodu çerçeve içine hizalayın
+            </AppText>
+          </View>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.resultScroll}>
-          <View style={[styles.resultCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            {/* Tip */}
-            <View style={[styles.resultTypeBadge, { backgroundColor: theme.surface }]}>
-              <Text style={{ fontSize: 22 }}>{detected?.icon}</Text>
-              <Text style={[styles.resultTypeText, { color: theme.accent }]}>{detected?.label}</Text>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.resultScroll, { paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.huge, gap: theme.spacing.md }]}
+        >
+          <AppCard padding="lg" style={styles.resultCard}>
+            <View style={[styles.resultTypeBadge, { backgroundColor: theme.surfaceSecondary, borderRadius: theme.radius.sm }]}>
+              <Text style={styles.resultEmoji} accessible={false}>
+                {detected?.icon}
+              </Text>
+              <AppText variant="subbody" tone="primary" style={[styles.resultTypeLabel, { color: theme.primary }]}>
+                {detected?.label}
+              </AppText>
             </View>
 
-            {/* İçerik */}
-            <Text style={[styles.resultLabel, { color: theme.textSecondary }]}>Okunan İçerik</Text>
-            <Text style={[styles.resultValue, { color: theme.text, backgroundColor: theme.surface }]}>
-              {result}
-            </Text>
+            <AppText variant="caption" tone="secondary" style={styles.resultFieldLabel}>
+              Okunan içerik
+            </AppText>
+            <View style={{ backgroundColor: theme.surfaceSecondary, borderRadius: theme.radius.sm, padding: theme.spacing.md }}>
+              <Text style={[styles.resultValue, { color: theme.textPrimary }]} selectable>
+                {result}
+              </Text>
+            </View>
 
-            {/* Aksiyonlar */}
-            <View style={styles.resultActions}>
+            <AppText variant="caption" tone="tertiary" style={styles.resultSafetyHint}>
+              {isURL ? 'Bağlantıyı yalnızca güvendiğiniz kaynaklarda açın.' : 'İçeriği paylaşmadan önce kontrol edin.'}
+            </AppText>
+
+            <View style={[styles.resultActions, { gap: theme.spacing.sm }]}>
               {isURL && (
                 <TouchableOpacity
-                  style={[styles.resultBtn, { backgroundColor: theme.accent }]}
+                  style={[
+                    styles.resultBtn,
+                    {
+                      backgroundColor: theme.primary,
+                      borderRadius: theme.radius.sm,
+                      paddingVertical: theme.spacing.md,
+                    },
+                  ]}
                   onPress={openLink}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Bağlantıyı tarayıcıda aç"
                 >
-                  <MaterialIcons name="open-in-browser" size={18} color="#FFF" />
-                  <Text style={styles.resultBtnText}>Aç</Text>
+                  <MaterialIcons name="open-in-browser" size={18} color={theme.textOnPrimary} />
+                  <AppText variant="button" tone="onPrimary">
+                    Aç
+                  </AppText>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={[styles.resultBtn, { backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.accent }]}
+                style={[
+                  styles.resultBtn,
+                  styles.resultBtnOutline,
+                  {
+                    borderColor: theme.primary,
+                    borderRadius: theme.radius.sm,
+                    paddingVertical: theme.spacing.md,
+                    backgroundColor: theme.surface,
+                  },
+                ]}
                 onPress={shareResult}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Metni paylaş"
               >
-                <MaterialIcons name="share" size={18} color={theme.accent} />
-                <Text style={[styles.resultBtnText, { color: theme.accent }]}>Paylaş</Text>
+                <MaterialIcons name="share" size={18} color={theme.primary} />
+                <AppText variant="button" tone="primary" style={{ color: theme.primary }}>
+                  Paylaş
+                </AppText>
               </TouchableOpacity>
             </View>
-          </View>
+          </AppCard>
 
           <TouchableOpacity
-            style={[styles.scanAgainBtn, { backgroundColor: theme.accent }]}
+            style={[
+              styles.scanAgainBtn,
+              {
+                backgroundColor: theme.primary,
+                borderRadius: theme.radius.sm + 2,
+                paddingVertical: theme.spacing.md,
+              },
+            ]}
             onPress={reset}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Yeni QR kod tara"
           >
-            <MaterialIcons name="qr-code-scanner" size={20} color="#FFF" />
-            <Text style={styles.scanAgainText}>Tekrar Tara</Text>
+            <MaterialIcons name="qr-code-scanner" size={22} color={theme.textOnPrimary} />
+            <AppText variant="button" tone="onPrimary" style={styles.scanAgainText}>
+              Tekrar tara
+            </AppText>
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -170,18 +284,51 @@ const CORNER = 24;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  permissionLoading: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  loadingFill: {
+    flex: 1,
+    minHeight: 200,
+  },
+  permissionCard: {
+    alignSelf: 'center',
+    maxWidth: 400,
+    width: '100%',
+  },
+  permissionEmoji: {
+    fontSize: 56,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  permissionTitle: {
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  permissionBody: {
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  primaryBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  primaryBtnLabel: {
+    textAlign: 'center',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
   },
-  title: { fontSize: 28, fontWeight: '800' },
   torchBtn: {
-    width: 40, height: 40, borderRadius: 12, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cameraWrapper: { flex: 1, position: 'relative' },
   camera: { flex: 1 },
@@ -191,46 +338,80 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   frame: {
-    width: FRAME, height: FRAME,
+    width: FRAME,
+    height: FRAME,
   },
   corner: {
     position: 'absolute',
-    width: CORNER, height: CORNER,
+    width: CORNER,
+    height: CORNER,
   },
   cornerTL: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 8 },
   cornerTR: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 8 },
   cornerBL: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 8 },
   cornerBR: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 8 },
-  scanHint: {
-    position: 'absolute', bottom: 40, alignSelf: 'center',
-    color: '#FFF', fontSize: 14, fontWeight: '600',
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+  scanHintPill: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  resultScroll: { padding: 20, gap: 16 },
-  resultCard: { borderRadius: 20, borderWidth: 1, padding: 20, gap: 16 },
+  scanHintText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  resultScroll: { flexGrow: 1 },
+  resultCard: {
+    gap: 12,
+  },
   resultTypeBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  resultTypeText: { fontSize: 15, fontWeight: '700' },
-  resultLabel: { fontSize: 12, fontWeight: '600', marginBottom: -8 },
+  resultEmoji: {
+    fontSize: 22,
+  },
+  resultTypeLabel: {
+    fontWeight: '700',
+  },
+  resultFieldLabel: {
+    marginBottom: -4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   resultValue: {
-    fontSize: 14, lineHeight: 20, padding: 14, borderRadius: 12,
+    fontSize: 14,
+    lineHeight: 20,
     fontFamily: 'monospace',
   },
-  resultActions: { flexDirection: 'row', gap: 12 },
+  resultSafetyHint: {
+    lineHeight: 18,
+  },
+  resultActions: { flexDirection: 'row', flexWrap: 'wrap' },
   resultBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 12, borderRadius: 12,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minWidth: 120,
   },
-  resultBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  resultBtnOutline: {
+    borderWidth: 1.5,
+  },
   scanAgainBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 16, borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 52,
   },
-  scanAgainText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-  permissionBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  permTitle: { fontSize: 22, fontWeight: '800', marginBottom: 12 },
-  permDesc: { fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
-  permBtn: { paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
+  scanAgainText: {
+    textAlign: 'center',
+  },
 });

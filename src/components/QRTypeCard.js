@@ -1,33 +1,68 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { TouchableOpacity, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import QRIcon from './QRIcon';
+import AppText from './AppText';
 
-export default function QRTypeCard({ item, onPress }) {
+export default function QRTypeCard({ item, onPress, disabled = false }) {
   const { theme } = useTheme();
   const isPremium = item.premium === true;
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.card,
+          borderColor: isPremium ? theme.primarySoft : theme.border,
+          borderRadius: theme.radius.md,
+          margin: theme.spacing.sm,
+          paddingVertical: theme.spacing.lg,
+          paddingHorizontal: theme.spacing.sm,
+          opacity: disabled ? 0.55 : 1,
+        },
+      ]}
       onPress={onPress}
+      disabled={disabled}
       activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      accessibilityLabel={`${item.label}. ${item.description}${isPremium ? '. Premium gerekir.' : ''}`}
     >
-      <View style={[styles.iconWrapper, { backgroundColor: theme.surface }]}>
+      <View
+        style={[
+          styles.iconWrapper,
+          {
+            backgroundColor: isPremium ? theme.primarySoft : theme.surface,
+            borderRadius: theme.radius.sm + 2,
+            marginBottom: theme.spacing.sm + 2,
+          },
+        ]}
+      >
         <QRIcon icon={item.icon} size={28} />
         {isPremium && (
-          <View style={[styles.lockBadge, { backgroundColor: theme.accent }]}>
-            <MaterialIcons name="lock" size={12} color="#FFF" />
+          <View
+            style={[
+              styles.badge,
+              {
+                backgroundColor: theme.primary,
+                borderRadius: theme.radius.pill,
+                borderWidth: 2,
+                borderColor: theme.card,
+              },
+            ]}
+          >
+            <MaterialIcons name="workspace-premium" size={11} color={theme.textOnPrimary} />
           </View>
         )}
       </View>
-      <Text style={[styles.label, { color: theme.text }]} numberOfLines={1}>
+      <AppText variant="subbody" tone="primary" style={styles.label} numberOfLines={1}>
         {item.label}
-      </Text>
-      <Text style={[styles.desc, { color: theme.textMuted }]} numberOfLines={1}>
+      </AppText>
+      <AppText variant="caption" tone="tertiary" style={styles.desc} numberOfLines={1}>
         {item.description}
-      </Text>
+      </AppText>
     </TouchableOpacity>
   );
 }
@@ -35,40 +70,35 @@ export default function QRTypeCard({ item, onPress }) {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    margin: 6,
-    borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 8,
+    minWidth: 0,
   },
   iconWrapper: {
     width: 52,
     height: 52,
-    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
     position: 'relative',
   },
-  lockBadge: {
+  badge: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    bottom: -6,
+    right: -6,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   label: {
-    fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
+    width: '100%',
   },
   desc: {
-    fontSize: 10,
     textAlign: 'center',
     marginTop: 2,
+    width: '100%',
   },
 });

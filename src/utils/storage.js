@@ -2,12 +2,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const HISTORY_KEY = '@qrbuilder_history';
 
+/** AsyncStorage kota riskini sınırlar; en yeni kayıtlar önceliklidir. */
+const MAX_HISTORY_ITEMS = 400;
+
 export async function saveQRToHistory(entry) {
   try {
     const existing = await getHistory();
     const updated = [{ ...entry, id: Date.now().toString(), createdAt: new Date().toISOString() }, ...existing];
-    await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-    return updated;
+    const trimmed = updated.slice(0, MAX_HISTORY_ITEMS);
+    await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+    return trimmed;
   } catch (e) {
     console.error('saveQRToHistory error:', e);
     return [];

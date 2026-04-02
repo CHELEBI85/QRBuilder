@@ -1,5 +1,13 @@
 // icon.lib: 'MaterialIcons' | 'FontAwesome5' | 'text'
 // icon.brand: true  → FontAwesome5'te brand icon kullan
+//
+// Alan metadata (type yoksa veya type: 'text' metin girişi):
+//   key, label, placeholder, keyboardType?, secureTextEntry?, multiline?
+//   required?, helperText?, autoCapitalize?, autoCorrect?, autoComplete?,
+//   textContentType?, returnKeyType? (CreateScreen’de indeks ile birleştirilir; tek alanlı formlarda genelde atlanır)
+//
+// Picker: type: 'picker', options, defaultValue?, helperText?
+
 export const QR_TYPES = [
   {
     id: 'url',
@@ -8,7 +16,19 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'language', color: '#4285F4' },
     description: 'Web sitesi linki',
     fields: [
-      { key: 'url', label: 'URL', placeholder: 'https://example.com', keyboardType: 'url' },
+      {
+        key: 'url',
+        label: 'URL',
+        placeholder: 'https://example.com',
+        keyboardType: 'url',
+        required: true,
+        helperText: 'http:// veya https:// ile başlamalıdır.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        autoComplete: 'url',
+        textContentType: 'URL',
+        returnKeyType: 'go',
+      },
     ],
   },
   {
@@ -18,7 +38,15 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'notes', color: '#607D8B' },
     description: 'Serbest metin',
     fields: [
-      { key: 'text', label: 'Metin', placeholder: 'Metninizi girin...', multiline: true },
+      {
+        key: 'text',
+        label: 'Metin',
+        placeholder: 'Metninizi girin...',
+        multiline: true,
+        required: true,
+        autoCapitalize: 'sentences',
+        returnKeyType: 'default',
+      },
     ],
   },
   {
@@ -28,9 +56,37 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'email', color: '#EA4335' },
     description: 'Email adresi',
     fields: [
-      { key: 'email', label: 'Email Adresi', placeholder: 'ornek@email.com', keyboardType: 'email-address' },
-      { key: 'subject', label: 'Konu', placeholder: 'Email konusu' },
-      { key: 'body', label: 'İçerik', placeholder: 'Email içeriği...', multiline: true },
+      {
+        key: 'email',
+        label: 'Email Adresi',
+        placeholder: 'ornek@email.com',
+        keyboardType: 'email-address',
+        required: true,
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        autoComplete: 'email',
+        textContentType: 'emailAddress',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'subject',
+        label: 'Konu',
+        placeholder: 'Email konusu',
+        required: false,
+        helperText: 'İsteğe bağlı.',
+        autoCapitalize: 'sentences',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'body',
+        label: 'İçerik',
+        placeholder: 'Email içeriği...',
+        multiline: true,
+        required: false,
+        helperText: 'İsteğe bağlı.',
+        autoCapitalize: 'sentences',
+        returnKeyType: 'default',
+      },
     ],
   },
   {
@@ -40,7 +96,17 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'phone', color: '#34A853' },
     description: 'Telefon numarası',
     fields: [
-      { key: 'phone', label: 'Telefon', placeholder: '+90 555 000 0000', keyboardType: 'phone-pad' },
+      {
+        key: 'phone',
+        label: 'Telefon',
+        placeholder: '+90 555 000 0000',
+        keyboardType: 'phone-pad',
+        required: true,
+        helperText: 'Ülke kodunu ekleyebilirsiniz (+90 …).',
+        autoComplete: 'tel',
+        textContentType: 'telephoneNumber',
+        returnKeyType: 'done',
+      },
     ],
   },
   {
@@ -50,8 +116,26 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'message', color: '#2196F3' },
     description: 'SMS mesajı',
     fields: [
-      { key: 'phone', label: 'Telefon', placeholder: '+90 555 000 0000', keyboardType: 'phone-pad' },
-      { key: 'message', label: 'Mesaj', placeholder: 'SMS içeriği...', multiline: true },
+      {
+        key: 'phone',
+        label: 'Telefon',
+        placeholder: '+90 555 000 0000',
+        keyboardType: 'phone-pad',
+        required: true,
+        autoComplete: 'tel',
+        textContentType: 'telephoneNumber',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'message',
+        label: 'Mesaj',
+        placeholder: 'SMS içeriği...',
+        multiline: true,
+        required: false,
+        helperText: 'İsteğe bağlı.',
+        autoCapitalize: 'sentences',
+        returnKeyType: 'default',
+      },
     ],
   },
   {
@@ -61,14 +145,35 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'wifi', color: '#00BCD4' },
     description: 'WiFi ağı',
     fields: [
-      { key: 'ssid', label: 'Ağ Adı (SSID)', placeholder: 'WiFi adı' },
-      { key: 'password', label: 'Şifre', placeholder: 'WiFi şifresi', secureTextEntry: true },
+      {
+        key: 'ssid',
+        label: 'Ağ Adı (SSID)',
+        placeholder: 'WiFi adı',
+        required: true,
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        returnKeyType: 'next',
+      },
+      {
+        key: 'password',
+        label: 'Şifre',
+        placeholder: 'WiFi şifresi',
+        secureTextEntry: true,
+        required: false,
+        helperText: 'Güvenlik “şifresiz” değilse şifre zorunludur.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        autoComplete: 'password',
+        textContentType: 'password',
+        returnKeyType: 'next',
+      },
       {
         key: 'security',
         label: 'Güvenlik',
         type: 'picker',
         options: ['WPA', 'WEP', 'nopass'],
         defaultValue: 'WPA',
+        helperText: 'Ağınızın şifreleme türü (WPA yaygın).',
       },
     ],
   },
@@ -79,12 +184,74 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'contact-page', color: '#FF9800' },
     description: 'vCard kişi bilgisi',
     fields: [
-      { key: 'firstName', label: 'Ad', placeholder: 'Ad' },
-      { key: 'lastName', label: 'Soyad', placeholder: 'Soyad' },
-      { key: 'phone', label: 'Telefon', placeholder: '+90 555 000 0000', keyboardType: 'phone-pad' },
-      { key: 'email', label: 'Email', placeholder: 'ornek@email.com', keyboardType: 'email-address' },
-      { key: 'organization', label: 'Şirket', placeholder: 'Şirket adı' },
-      { key: 'url', label: 'Web Sitesi', placeholder: 'https://example.com', keyboardType: 'url' },
+      {
+        key: 'firstName',
+        label: 'Ad',
+        placeholder: 'Ad',
+        required: false,
+        helperText: 'Ad veya soyaddan en az biri girilmelidir.',
+        autoCapitalize: 'words',
+        autoComplete: 'name',
+        textContentType: 'givenName',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'lastName',
+        label: 'Soyad',
+        placeholder: 'Soyad',
+        required: false,
+        autoCapitalize: 'words',
+        autoComplete: 'name',
+        textContentType: 'familyName',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'phone',
+        label: 'Telefon',
+        placeholder: '+90 555 000 0000',
+        keyboardType: 'phone-pad',
+        required: false,
+        helperText: 'İsteğe bağlı.',
+        autoComplete: 'tel',
+        textContentType: 'telephoneNumber',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'email',
+        label: 'Email',
+        placeholder: 'ornek@email.com',
+        keyboardType: 'email-address',
+        required: false,
+        helperText: 'İsteğe bağlı; doluysa geçerli format gerekir.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        autoComplete: 'email',
+        textContentType: 'emailAddress',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'organization',
+        label: 'Şirket',
+        placeholder: 'Şirket adı',
+        required: false,
+        autoCapitalize: 'words',
+        autoComplete: 'organization',
+        textContentType: 'organizationName',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'url',
+        label: 'Web Sitesi',
+        placeholder: 'https://example.com',
+        keyboardType: 'url',
+        required: false,
+        helperText: 'İsteğe bağlı.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        autoComplete: 'url',
+        textContentType: 'URL',
+        returnKeyType: 'done',
+      },
     ],
   },
   {
@@ -94,8 +261,27 @@ export const QR_TYPES = [
     icon: { lib: 'FontAwesome5', name: 'whatsapp', color: '#25D366', brand: true },
     description: 'WhatsApp mesajı',
     fields: [
-      { key: 'phone', label: 'Telefon (ülke kodu ile)', placeholder: '+905550000000', keyboardType: 'phone-pad' },
-      { key: 'message', label: 'Mesaj (isteğe bağlı)', placeholder: 'Merhaba!', multiline: true },
+      {
+        key: 'phone',
+        label: 'Telefon (ülke kodu ile)',
+        placeholder: '+905550000000',
+        keyboardType: 'phone-pad',
+        required: true,
+        helperText: 'Başında + ile ülke kodu (ör. +90).',
+        autoComplete: 'tel',
+        textContentType: 'telephoneNumber',
+        returnKeyType: 'next',
+      },
+      {
+        key: 'message',
+        label: 'Mesaj',
+        placeholder: 'Merhaba!',
+        multiline: true,
+        required: false,
+        helperText: 'İsteğe bağlı.',
+        autoCapitalize: 'sentences',
+        returnKeyType: 'default',
+      },
     ],
   },
   {
@@ -105,7 +291,18 @@ export const QR_TYPES = [
     icon: { lib: 'FontAwesome5', name: 'instagram', color: '#E1306C', brand: true },
     description: 'Instagram profili',
     fields: [
-      { key: 'username', label: 'Kullanıcı Adı', placeholder: 'kullaniciadi' },
+      {
+        key: 'username',
+        label: 'Kullanıcı Adı',
+        placeholder: 'kullaniciadi',
+        required: true,
+        helperText: '@ olmadan; harf, rakam, _ ve . kullanılabilir.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        autoComplete: 'username',
+        textContentType: 'username',
+        returnKeyType: 'done',
+      },
     ],
   },
   {
@@ -115,7 +312,18 @@ export const QR_TYPES = [
     icon: { lib: 'text', name: '𝕏', color: '#000000' },
     description: 'X / Twitter profili',
     fields: [
-      { key: 'username', label: 'Kullanıcı Adı', placeholder: 'kullaniciadi' },
+      {
+        key: 'username',
+        label: 'Kullanıcı Adı',
+        placeholder: 'kullaniciadi',
+        required: true,
+        helperText: '@ olmadan; harf, rakam, _ ve . kullanılabilir.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        autoComplete: 'username',
+        textContentType: 'username',
+        returnKeyType: 'done',
+      },
     ],
   },
   {
@@ -125,7 +333,16 @@ export const QR_TYPES = [
     icon: { lib: 'FontAwesome5', name: 'youtube', color: '#FF0000', brand: true },
     description: 'YouTube kanalı',
     fields: [
-      { key: 'channel', label: 'Kanal Adı', placeholder: 'kanal-adi' },
+      {
+        key: 'channel',
+        label: 'Kanal Adı',
+        placeholder: 'kanal-adi',
+        required: true,
+        helperText: 'Kanal URL’sindeki veya @ sonrası kısım.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        returnKeyType: 'done',
+      },
     ],
   },
   {
@@ -135,8 +352,42 @@ export const QR_TYPES = [
     icon: { lib: 'MaterialIcons', name: 'location-on', color: '#F44336' },
     description: 'GPS koordinatı',
     fields: [
-      { key: 'latitude', label: 'Enlem', placeholder: '41.0082', keyboardType: 'decimal-pad' },
-      { key: 'longitude', label: 'Boylam', placeholder: '28.9784', keyboardType: 'decimal-pad' },
+      {
+        key: 'latitude',
+        label: 'Enlem',
+        placeholder: '41.0082',
+        keyboardType: 'decimal-pad',
+        required: true,
+        helperText: '−90 ile 90 arasında ondalık sayı.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        returnKeyType: 'next',
+      },
+      {
+        key: 'longitude',
+        label: 'Boylam',
+        placeholder: '28.9784',
+        keyboardType: 'decimal-pad',
+        required: true,
+        helperText: '−180 ile 180 arasında ondalık sayı.',
+        autoCapitalize: 'none',
+        autoCorrect: false,
+        returnKeyType: 'done',
+      },
     ],
   },
 ];
+
+/** id → tanım; UI ve çekirdek (validator / formatter) için tek indeks. */
+const QR_TYPE_BY_ID = Object.freeze(Object.fromEntries(QR_TYPES.map((t) => [t.id, t])));
+
+export function getQRTypeById(id) {
+  return QR_TYPE_BY_ID[id];
+}
+
+export function isRegisteredQRTypeId(id) {
+  return id != null && QR_TYPE_BY_ID[id] !== undefined;
+}
+
+/** Kayıtlı tür kimlikleri (sıra: QR_TYPES ile aynı). */
+export const QR_TYPE_IDS = Object.freeze(QR_TYPES.map((t) => t.id));

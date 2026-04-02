@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import * as RNIap from 'react-native-iap';
 import {
   checkIsSubscribed,
   purchaseSubscription,
@@ -16,6 +15,7 @@ export function SubscriptionProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!isIAPSupported()) {
@@ -40,18 +40,26 @@ export function SubscriptionProvider({ children }) {
 
     if (!isIAPSupported()) return;
 
-    const sub = RNIap.purchaseUpdatedListener(() => {
-      setIsPremium(true);
-      refresh();
-    });
-    const errSub = RNIap.purchaseErrorListener((err) => {
-      setPurchaseLoading(false);
-      if (err?.code !== 'E_USER_CANCELLED') {
-        console.warn('[Subscription] purchase error:', err);
-      }
-    });
+    let mounted = true;
+    let sub = null;
+    let errSub = null;
+
+    (async () => {
+      const RNIap = await import('react-native-iap');
+      if (!mounted) return;
+      sub = RNIap.purchaseUpdatedListener(() => {
+        setIsPremium(true);
+        refresh();
+      });
+      errSub = RNIap.purchaseErrorListener((err) => {
+        if (err?.code !== 'E_USER_CANCELLED') {
+          console.warn('[Subscription] purchase error:', err);
+        }
+      });
+    })();
 
     return () => {
+      mounted = false;
       sub?.remove?.();
       errSub?.remove?.();
     };
@@ -61,30 +69,68 @@ export function SubscriptionProvider({ children }) {
     setPurchaseLoading(true);
     try {
       const result = await purchaseSubscription(sku);
-      if (result.ok) {
+
+      if (result.status === 'success') {
         setIsPremium(true);
-        return { ok: true };
+        await refresh();
+        return { ok: true, status: 'success' };
       }
-      return { ok: false, error: result.error };
+
+      if (result.status === 'cancelled') {
+        return { ok: false, status: 'cancelled' };
+      }
+
+      if (result.status === 'not_verified') {
+        const subscribed = await checkIsSubscribed();
+        if (subscribed) {
+          setIsPremium(true);
+          await refresh();
+          return { ok: true, status: 'success' };
+        }
+        return {
+          ok: false,
+          status: 'not_verified',
+          userMessage: result.userMessage,
+        };
+      }
+
+      return {
+        ok: false,
+        status: 'failed',
+        userMessage: result.userMessage,
+        error: result.error,
+      };
     } finally {
       setPurchaseLoading(false);
     }
-  }, []);
+  }, [refresh]);
 
   const restore = useCallback(async () => {
-    setPurchaseLoading(true);
+    setRestoreLoading(true);
     try {
       await restorePurchases();
       const subscribed = await checkIsSubscribed();
       setIsPremium(subscribed);
       const prods = await getSubscriptionProducts();
       setProducts(prods);
-      return subscribed;
+      if (subscribed) {
+        return { ok: true, status: 'restored' };
+      }
+      return {
+        ok: false,
+        status: 'not_found',
+        userMessage:
+          'Bu Google Play hesabında aktif bir abonelik bulunamadı. Daha önce satın aldığınız hesaba giriş yaptığınızdan emin olun.',
+      };
     } catch (e) {
       console.warn('[Subscription] restore failed:', e);
-      return false;
+      return {
+        ok: false,
+        status: 'failed',
+        userMessage: 'Geri yükleme sırasında bir sorun oluştu. İnternet bağlantınızı kontrol edip tekrar deneyin.',
+      };
     } finally {
-      setPurchaseLoading(false);
+      setRestoreLoading(false);
     }
   }, []);
 
@@ -93,6 +139,7 @@ export function SubscriptionProvider({ children }) {
     loading,
     products,
     purchaseLoading,
+    restoreLoading,
     purchase,
     restore,
     refresh,

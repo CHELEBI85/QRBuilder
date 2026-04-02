@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import InputField from '../components/InputField';
 import QRIcon from '../components/QRIcon';
+import ScreenContainer from '../components/ScreenContainer';
+import SectionHeader from '../components/SectionHeader';
+import AppText from '../components/AppText';
+import AppCard from '../components/AppCard';
 import { formatQRData } from '../utils/qrFormatter';
 import { validateQRForm } from '../utils/validators';
 
@@ -21,7 +22,6 @@ export default function CreateScreen({ route, navigation }) {
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
 
-  // Her ekran ziyaretinde formu sıfırla
   useEffect(() => {
     setFormData({});
     setErrors({});
@@ -29,7 +29,6 @@ export default function CreateScreen({ route, navigation }) {
 
   const updateField = (key, value) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
-    // Alan düzeltilince hatasını temizle
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: null }));
   };
 
@@ -37,7 +36,6 @@ export default function CreateScreen({ route, navigation }) {
     const validationError = validateQRForm(qrType.id, formData);
     if (validationError) {
       setErrors({ [validationError.field]: validationError.message });
-      Alert.alert('Eksik veya Hatalı Bilgi', validationError.message);
       return;
     }
     setErrors({});
@@ -45,38 +43,68 @@ export default function CreateScreen({ route, navigation }) {
     navigation.navigate('Preview', { qrType, formData, qrValue });
   };
 
-  const renderField = (field) => {
+  const resolveAutoCapitalize = (field) => {
+    if (field.autoCapitalize != null) return field.autoCapitalize;
+    return field.multiline ? 'sentences' : 'none';
+  };
+
+  const resolveReturnKeyType = (field, index) => {
+    if (field.returnKeyType != null) return field.returnKeyType;
+    const isLast = index === qrType.fields.length - 1;
+    return isLast ? 'done' : 'next';
+  };
+
+  const renderField = (field, index) => {
     if (field.type === 'picker') {
       const current = formData[field.key] || field.defaultValue || field.options[0];
       return (
-        <View key={field.key} style={styles.pickerWrapper}>
-          <Text style={[styles.pickerLabel, { color: theme.textSecondary }]}>{field.label}</Text>
-          <View style={styles.pickerRow}>
+        <View key={field.key} style={{ marginBottom: theme.spacing.lg }}>
+          <View style={[styles.pickerLabelRow, { marginBottom: theme.spacing.xs }]}>
+            <AppText variant="subbody" tone="secondary" style={styles.pickerLabelFlex}>
+              {field.label}
+            </AppText>
+          </View>
+          <View style={[styles.pickerRow, { gap: theme.spacing.sm }]}>
             {field.options.map((opt) => (
               <TouchableOpacity
                 key={opt}
                 style={[
                   styles.pickerOption,
                   {
-                    backgroundColor: current === opt ? theme.accent : theme.inputBackground,
-                    borderColor: current === opt ? theme.accent : theme.border,
+                    backgroundColor: current === opt ? theme.primary : theme.inputBackground,
+                    borderColor: current === opt ? theme.primary : theme.border,
+                    borderRadius: theme.radius.sm,
                   },
                 ]}
                 onPress={() => updateField(field.key, opt)}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: current === opt }}
+                accessibilityLabel={`${field.label}: ${opt}`}
               >
-                <Text style={[styles.pickerOptionText, { color: current === opt ? '#FFFFFF' : theme.text }]}>
+                <AppText
+                  variant="subbody"
+                  tone={current === opt ? 'onPrimary' : 'primary'}
+                  style={styles.pickerOptionText}
+                >
                   {opt}
-                </Text>
+                </AppText>
               </TouchableOpacity>
             ))}
           </View>
+          {field.helperText ? (
+            <AppText variant="caption" tone="tertiary" style={styles.pickerHelper}>
+              {field.helperText}
+            </AppText>
+          ) : null}
         </View>
       );
     }
 
+    const returnKeyType = resolveReturnKeyType(field, index);
+
     return (
-      <View key={field.key}>
+      <View key={field.key} style={{ marginBottom: theme.spacing.md }}>
         <InputField
           label={field.label}
           value={formData[field.key] || ''}
@@ -85,12 +113,16 @@ export default function CreateScreen({ route, navigation }) {
           keyboardType={field.keyboardType}
           secureTextEntry={field.secureTextEntry}
           multiline={field.multiline}
-          autoCapitalize={field.multiline ? 'sentences' : 'none'}
-          hasError={!!errors[field.key]}
+          autoCapitalize={resolveAutoCapitalize(field)}
+          autoCorrect={field.autoCorrect}
+          autoComplete={field.autoComplete}
+          textContentType={field.textContentType}
+          returnKeyType={returnKeyType}
+          blurOnSubmit={!field.multiline}
+          helperText={field.helperText}
+          error={errors[field.key] || undefined}
+          required={field.required === true}
         />
-        {errors[field.key] && (
-          <Text style={[styles.errorText, { color: theme.error }]}>⚠ {errors[field.key]}</Text>
-        )}
       </View>
     );
   };
@@ -99,77 +131,110 @@ export default function CreateScreen({ route, navigation }) {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <ScreenContainer
+        scroll
+        edges={['bottom', 'left', 'right']}
+        contentContainerStyle={{
+          paddingTop: theme.spacing.md,
+          paddingBottom: theme.spacing.huge,
+        }}
       >
-        <View style={[styles.typeHeader, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={[styles.iconWrapper, { backgroundColor: theme.surface }]}>
-            <QRIcon icon={qrType.icon} size={30} />
-          </View>
-          <View>
-            <Text style={[styles.typeName, { color: theme.text }]}>{qrType.label}</Text>
-            <Text style={[styles.typeDesc, { color: theme.textSecondary }]}>{qrType.description}</Text>
-          </View>
-        </View>
+        <SectionHeader
+          title={qrType.label}
+          subtitle={qrType.description}
+          style={{ paddingTop: theme.spacing.sm }}
+        />
 
-        <View style={styles.form}>
-          {qrType.fields.map((field) => renderField(field))}
-        </View>
+        <AppCard padding="lg" style={[styles.heroIconCard, { marginBottom: theme.spacing.lg }]}>
+          <View
+            style={[
+              styles.iconCircle,
+              {
+                backgroundColor: theme.primarySoft,
+                borderRadius: theme.radius.lg,
+              },
+            ]}
+          >
+            <QRIcon icon={qrType.icon} size={36} />
+          </View>
+        </AppCard>
+
+        <AppCard padding="lg" style={{ marginBottom: theme.spacing.lg }}>
+          <AppText variant="sectionLabel" tone="secondary" style={{ marginBottom: theme.spacing.md }}>
+            BİLGİLER
+          </AppText>
+          {qrType.fields.map((field, index) => renderField(field, index))}
+        </AppCard>
 
         <TouchableOpacity
-          style={[styles.generateBtn, { backgroundColor: theme.accent }]}
+          style={[
+            styles.generateBtn,
+            {
+              backgroundColor: theme.primary,
+              borderRadius: theme.radius.sm + 2,
+              paddingVertical: theme.spacing.md,
+              marginHorizontal: theme.spacing.xs,
+            },
+          ]}
           onPress={handleGenerate}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="QR kodu oluştur ve önizlemeye git"
         >
-          <Text style={styles.generateBtnText}>QR Kodu Oluştur →</Text>
+          <AppText variant="button" tone="onPrimary" style={styles.generateBtnText}>
+            QR kodu oluştur →
+          </AppText>
         </TouchableOpacity>
-      </ScrollView>
+      </ScreenContainer>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { padding: 20, paddingBottom: 40 },
-  typeHeader: {
-    flexDirection: 'row',
+  heroIconCard: {
     alignItems: 'center',
-    gap: 14,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 24,
   },
-  iconWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+  iconCircle: {
+    width: 64,
+    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  typeName: { fontSize: 18, fontWeight: '700' },
-  typeDesc: { fontSize: 13, marginTop: 2 },
-  form: { marginBottom: 10 },
-  errorText: { fontSize: 12, marginTop: -10, marginBottom: 10, marginLeft: 4 },
-  pickerWrapper: { marginBottom: 14 },
-  pickerLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8, marginLeft: 2 },
-  pickerRow: { flexDirection: 'row', gap: 10 },
+  pickerLabelRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  pickerLabelFlex: {
+    flexShrink: 1,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+  },
   pickerOption: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 10,
     borderWidth: 1.5,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  pickerOptionText: { fontSize: 14, fontWeight: '600' },
-  generateBtn: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
+  pickerOptionText: {
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  pickerHelper: {
     marginTop: 8,
+    marginLeft: 4,
   },
-  generateBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  generateBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  generateBtnText: {
+    textAlign: 'center',
+  },
 });

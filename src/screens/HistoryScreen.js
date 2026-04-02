@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,20 +15,35 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { getHistory, deleteQRFromHistory, clearHistory } from '../utils/storage';
+import { ensureMediaLibrarySavePermission, savePngDataUrlToGallery } from '../utils/qrGalleryExport';
 import { QR_TYPES } from '../constants/qrTypes';
 import QRIcon from '../components/QRIcon';
 import QRCode from 'react-native-qrcode-svg';
+import AppCard from '../components/AppCard';
+import SectionHeader from '../components/SectionHeader';
+import EmptyState from '../components/EmptyState';
+import LoadingState from '../components/LoadingState';
+import AppText from '../components/AppText';
 
 export default function HistoryScreen() {
   const { theme } = useTheme();
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeType, setActiveType] = useState(null); // filtre: typeId veya null
-  const [previewItem, setPreviewItem] = useState(null); // büyük QR modal
+  const [activeType, setActiveType] = useState(null);
+  const [previewItem, setPreviewItem] = useState(null);
+  const [savingGallery, setSavingGallery] = useState(false);
+  const modalQrRef = useRef(null);
+  const firstHistoryLoad = useRef(true);
 
   useFocusEffect(
     useCallback(() => {
-      getHistory().then(setHistory);
+      if (firstHistoryLoad.current) setLoading(true);
+      getHistory().then((data) => {
+        setHistory(data);
+        setLoading(false);
+        firstHistoryLoad.current = false;
+      });
     }, [])
   );
 
@@ -43,7 +58,6 @@ export default function HistoryScreen() {
     });
   }, [history, search, activeType]);
 
-  // Tarihte kaç türden kayıt var — filtre chip'leri için
   const usedTypes = useMemo(() => {
     const ids = [...new Set(history.map((h) => h.typeId))];
     return QR_TYPES.filter((t) => ids.includes(t.id));
@@ -89,20 +103,67 @@ export default function HistoryScreen() {
     })}`;
   };
 
-  // WiFi QR değerindeki şifreyi maskele: WIFI:T:WPA;S:SSID;P:password;; → P:••••••••
   const maskWifiPassword = (typeId, qrValue) => {
     if (typeId !== 'wifi' || !qrValue) return qrValue;
     return qrValue.replace(/(;P:)([^;]+)(;)/, '$1••••••••$3');
   };
 
+  const savePreviewToGallery = async () => {
+    if (!previewItem || !modalQrRef.current) {
+      Alert.alert('Hata', 'QR görüntüsü hazır değil. Modalı kapatıp tekrar açın.');
+      return;
+    }
+    const perm = await ensureMediaLibrarySavePermission();
+    if (!perm.ok) {
+      Alert.alert(
+        'İzin gerekli',
+        'Galeriye kaydetmek için fotoğraf / medya erişimine izin verin. Gerekirse sistem ayarlarından açın.'
+      );
+      return;
+    }
+    setSavingGallery(true);
+    modalQrRef.current.toDataURL(async (data) => {
+      try {
+        await savePngDataUrlToGallery(data, previewItem.typeId || 'qr');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Kaydedildi', 'QR kod galerinize kaydedildi.');
+      } catch (e) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        if (__DEV__) console.warn('[History saveToGallery]', e);
+        Alert.alert(
+          'Kaydedilemedi',
+          e?.message === 'EMPTY_IMAGE_DATA'
+            ? 'QR görüntüsü oluşturulamadı.'
+            : 'Galeriye kayıt başarısız. İzinleri ve depolama alanını kontrol edin.'
+        );
+      } finally {
+        setSavingGallery(false);
+      }
+    });
+  };
+
   const renderItem = ({ item }) => {
     const qrTypeDef = QR_TYPES.find((t) => t.id === item.typeId);
     return (
-      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        {/* Thumbnail — tıklanınca büyür */}
+      <AppCard
+        style={[
+          styles.listCard,
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.md,
+            marginBottom: theme.spacing.md,
+            marginHorizontal: theme.spacing.lg,
+          },
+        ]}
+        padding="md"
+      >
         <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); setPreviewItem(item); }}
-          style={[styles.qrThumb, { backgroundColor: '#FFFFFF' }]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setPreviewItem(item);
+          }}
+          style={[styles.qrThumb, { backgroundColor: theme.qrLight }]}
           activeOpacity={0.7}
         >
           <QRCode
@@ -115,71 +176,125 @@ export default function HistoryScreen() {
         </TouchableOpacity>
 
         <View style={styles.info}>
-          <View style={styles.typeLabelRow}>
+          <View style={[styles.typeLabelRow, { gap: 5 }]}>
             {qrTypeDef && <QRIcon icon={qrTypeDef.icon} size={14} />}
-            <Text style={[styles.typeLabel, { color: theme.accent }]}>{item.typeLabel}</Text>
+            <AppText variant="caption" tone="primary" style={[styles.typeLabel, { color: theme.primary }]}>
+              {item.typeLabel}
+            </AppText>
           </View>
-          <Text style={[styles.qrValue, { color: theme.text }]} numberOfLines={2}>{maskWifiPassword(item.typeId, item.qrValue)}</Text>
-          <Text style={[styles.date, { color: theme.textMuted }]}>{formatDate(item.createdAt)}</Text>
+          <AppText variant="caption" tone="primary" style={styles.qrValue} numberOfLines={2}>
+            {maskWifiPassword(item.typeId, item.qrValue)}
+          </AppText>
+          <AppText variant="caption" tone="tertiary" style={styles.date}>
+            {formatDate(item.createdAt)}
+          </AppText>
         </View>
 
         <TouchableOpacity
-          style={[styles.deleteBtn, { backgroundColor: theme.surface }]}
+          style={[styles.deleteBtn, { backgroundColor: theme.surface, borderRadius: theme.radius.sm }]}
           onPress={() => handleDelete(item.id)}
           activeOpacity={0.8}
         >
           <Text style={{ color: theme.error, fontSize: 18 }}>🗑️</Text>
         </TouchableOpacity>
-      </View>
+      </AppCard>
     );
   };
 
+  const headerSubtitle =
+    loading && history.length === 0 ? '…' : `${filtered.length} / ${history.length} QR kodu`;
+
+  let mainContent = null;
+  if (loading) {
+    mainContent = <LoadingState />;
+  } else if (history.length === 0) {
+    mainContent = (
+      <EmptyState
+        emoji="📋"
+        title="Henüz kayıtlı QR kodu yok"
+        hint='QR oluşturup "Geçmişe Kaydet" butonuna basın'
+      />
+    );
+  } else if (filtered.length === 0) {
+    mainContent = <EmptyState emoji="🔍" title="Sonuç bulunamadı" />;
+  } else {
+    mainContent = (
+      <FlatList
+        style={styles.flexMain}
+        data={filtered}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[styles.list, { paddingBottom: theme.spacing.xxl }]}
+        showsVerticalScrollIndicator={false}
+      />
+    );
+  }
+
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: theme.text }]}>Geçmiş</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            {filtered.length} / {history.length} QR kodu
-          </Text>
-        </View>
-        {history.length > 0 && (
-          <TouchableOpacity onPress={handleClearAll} activeOpacity={0.8}>
-            <Text style={[styles.clearAll, { color: theme.error }]}>Tümünü Sil</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <SectionHeader
+        title="Geçmiş"
+        subtitle={headerSubtitle}
+        right={
+          !loading && history.length > 0 ? (
+            <TouchableOpacity onPress={handleClearAll} activeOpacity={0.8}>
+              <AppText variant="subbody" tone="error" style={styles.clearAll}>
+                Tümünü Sil
+              </AppText>
+            </TouchableOpacity>
+          ) : null
+        }
+      />
 
-      {/* Arama Çubuğu */}
-      {history.length > 0 && (
-        <View style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+      {!loading && history.length > 0 && (
+        <AppCard
+          padding="md"
+          style={[
+            styles.searchRow,
+            {
+              marginHorizontal: theme.spacing.lg,
+              marginBottom: theme.spacing.sm + 2,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.sm,
+            },
+          ]}
+        >
+          <Text style={{ fontSize: 16 }}>🔍</Text>
           <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
+            style={[styles.searchInput, { color: theme.textPrimary, flex: 1 }]}
             value={search}
             onChangeText={setSearch}
             placeholder="QR içeriği veya tür ara..."
-            placeholderTextColor={theme.textMuted}
+            placeholderTextColor={theme.textTertiary}
             returnKeyType="search"
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Text style={{ color: theme.textMuted, fontSize: 16 }}>✕</Text>
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <Text style={{ color: theme.textTertiary, fontSize: 16 }}>✕</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </AppCard>
       )}
 
-      {/* Tür Filtresi (Chip'ler) */}
-      {usedTypes.length > 1 && (
+      {!loading && usedTypes.length > 1 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
+          contentContainerStyle={[
+            styles.filterRow,
+            { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm + 2, gap: theme.spacing.sm },
+          ]}
         >
           <TouchableOpacity
-            style={[styles.chip, { backgroundColor: !activeType ? theme.accent : theme.card, borderColor: theme.border }]}
+            style={[
+              styles.chip,
+              {
+                backgroundColor: !activeType ? theme.primary : theme.card,
+                borderColor: theme.border,
+                borderRadius: theme.radius.pill,
+              },
+            ]}
             onPress={() => setActiveType(null)}
           >
             <Text style={[styles.chipText, { color: !activeType ? '#FFF' : theme.textSecondary }]}>Tümü</Text>
@@ -187,41 +302,27 @@ export default function HistoryScreen() {
           {usedTypes.map((t) => (
             <TouchableOpacity
               key={t.id}
-              style={[styles.chip, { backgroundColor: activeType === t.id ? theme.accent : theme.card, borderColor: theme.border }]}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: activeType === t.id ? theme.primary : theme.card,
+                  borderColor: theme.border,
+                  borderRadius: theme.radius.pill,
+                },
+              ]}
               onPress={() => setActiveType(activeType === t.id ? null : t.id)}
             >
               <QRIcon icon={t.icon} size={13} />
-              <Text style={[styles.chipText, { color: activeType === t.id ? '#FFF' : theme.textSecondary }]}>{t.label}</Text>
+              <Text style={[styles.chipText, { color: activeType === t.id ? '#FFF' : theme.textSecondary }]}>
+                {t.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       )}
 
-      {/* Liste */}
-      {history.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>📋</Text>
-          <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Henüz kayıtlı QR kodu yok</Text>
-          <Text style={[styles.emptyHint, { color: theme.textMuted }]}>
-            QR oluşturup "Geçmişe Kaydet" butonuna basın
-          </Text>
-        </View>
-      ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🔍</Text>
-          <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Sonuç bulunamadı</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <View style={styles.flexMain}>{mainContent}</View>
 
-      {/* QR Büyütme Modalı */}
       <Modal
         visible={!!previewItem}
         transparent
@@ -234,9 +335,12 @@ export default function HistoryScreen() {
           onPress={() => setPreviewItem(null)}
         >
           {previewItem && (
-            <View style={[styles.previewCard, { backgroundColor: theme.card }]}>
-              <View style={[styles.previewQR, { backgroundColor: previewItem.bgColor || '#FFFFFF' }]}>
+            <View style={[styles.previewCard, { backgroundColor: theme.card, borderRadius: theme.radius.xl }]}>
+              <View style={[styles.previewQR, { backgroundColor: previewItem.bgColor || '#FFFFFF', borderRadius: theme.radius.md }]}>
                 <QRCode
+                  getRef={(r) => {
+                    modalQrRef.current = r;
+                  }}
                   value={previewItem.qrValue || 'QR'}
                   size={240}
                   color={previewItem.fgColor || '#000000'}
@@ -246,15 +350,40 @@ export default function HistoryScreen() {
               <Text style={[styles.previewLabel, { color: theme.text }]} numberOfLines={3}>
                 {maskWifiPassword(previewItem.typeId, previewItem.qrValue)}
               </Text>
-              <Text style={[styles.previewDate, { color: theme.textMuted }]}>
-                {formatDate(previewItem.createdAt)}
-              </Text>
-              <TouchableOpacity
-                style={[styles.previewClose, { backgroundColor: theme.accent }]}
-                onPress={() => setPreviewItem(null)}
-              >
-                <Text style={{ color: '#FFF', fontWeight: '700' }}>Kapat</Text>
-              </TouchableOpacity>
+              <Text style={[styles.previewDate, { color: theme.textMuted }]}>{formatDate(previewItem.createdAt)}</Text>
+              <View style={styles.previewActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.previewSaveBtn,
+                    {
+                      backgroundColor: theme.primary,
+                      borderRadius: theme.radius.sm,
+                      opacity: savingGallery ? 0.6 : 1,
+                    },
+                  ]}
+                  onPress={savePreviewToGallery}
+                  disabled={savingGallery}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="QR kodu galeriye kaydet"
+                >
+                  <AppText variant="button" tone="onPrimary">
+                    {savingGallery ? 'Kaydediliyor…' : 'Galeriye kaydet'}
+                  </AppText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.previewClose, { backgroundColor: theme.surfaceSecondary, borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.border }]}
+                  onPress={() => setPreviewItem(null)}
+                  disabled={savingGallery}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kapat"
+                >
+                  <AppText variant="button" tone="primary">
+                    Kapat
+                  </AppText>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </TouchableOpacity>
@@ -265,61 +394,33 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-  },
-  title: { fontSize: 28, fontWeight: '800' },
-  subtitle: { fontSize: 13, marginTop: 2 },
-  clearAll: { fontSize: 14, fontWeight: '600' },
-  searchBar: {
+  flexMain: { flex: 1 },
+  clearAll: { fontWeight: '600' },
+  searchRow: {},
+  searchInput: { fontSize: 14 },
+  filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
   },
-  searchInput: { flex: 1, fontSize: 14 },
-  filterRow: { paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
     borderWidth: 1,
   },
   chipText: { fontSize: 12, fontWeight: '600' },
-  list: { paddingHorizontal: 16, paddingBottom: 24 },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 12,
-    gap: 12,
-  },
+  list: { paddingHorizontal: 0 },
+  listCard: {},
   qrThumb: { borderRadius: 10, padding: 6, alignItems: 'center' },
   thumbHint: { fontSize: 10, marginTop: 2, textAlign: 'center' },
   info: { flex: 1 },
-  typeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
-  typeLabel: { fontSize: 13, fontWeight: '700' },
-  qrValue: { fontSize: 12, lineHeight: 16, marginBottom: 4 },
-  date: { fontSize: 11 },
-  deleteBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 80 },
-  emptyEmoji: { fontSize: 60, marginBottom: 16 },
-  emptyText: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
-  emptyHint: { fontSize: 13, textAlign: 'center', paddingHorizontal: 40 },
+  typeLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  typeLabel: { fontWeight: '700' },
+  qrValue: { lineHeight: 16, marginBottom: 4 },
+  date: {},
+  deleteBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   previewOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -327,18 +428,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   previewCard: {
-    borderRadius: 24,
     padding: 24,
     alignItems: 'center',
     width: '85%',
     gap: 16,
   },
-  previewQR: { padding: 16, borderRadius: 16 },
+  previewQR: { padding: 16 },
   previewLabel: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
   previewDate: { fontSize: 12 },
-  previewClose: {
-    paddingHorizontal: 32,
+  previewActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewSaveBtn: {
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 12,
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  previewClose: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    minWidth: 120,
+    alignItems: 'center',
   },
 });

@@ -1,18 +1,16 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Alert,
   Modal,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -22,28 +20,39 @@ import QRCodeDisplay from '../components/QRCodeDisplay';
 import ColorSwatchRow from '../components/ColorSwatchRow';
 import QRIcon from '../components/QRIcon';
 import Toast from '../components/Toast';
+import ScreenContainer from '../components/ScreenContainer';
+import AppText from '../components/AppText';
+import AppCard from '../components/AppCard';
 import { saveQRToHistory } from '../utils/storage';
 import { getPreferences } from '../utils/preferences';
+import {
+  ensureMediaLibrarySavePermission,
+  savePngDataUrlToGallery,
+  stripDataUrlToBase64Payload,
+} from '../utils/qrGalleryExport';
 
 const COLOR_THEMES = [
-  { label: 'Klasik',  fg: '#000000', bg: '#FFFFFF' },
-  { label: 'Gece',    fg: '#FFFFFF', bg: '#1A1A2E' },
+  { label: 'Klasik', fg: '#000000', bg: '#FFFFFF' },
+  { label: 'Gece', fg: '#FFFFFF', bg: '#1A1A2E' },
   { label: 'Okyanus', fg: '#FFFFFF', bg: '#0077B6' },
-  { label: 'Ateş',    fg: '#FFFFFF', bg: '#D62828' },
-  { label: 'Orman',   fg: '#FFFFFF', bg: '#2D6A4F' },
-  { label: 'Altın',   fg: '#1A1A2E', bg: '#FFD93D' },
+  { label: 'Ateş', fg: '#FFFFFF', bg: '#D62828' },
+  { label: 'Orman', fg: '#FFFFFF', bg: '#2D6A4F' },
+  { label: 'Altın', fg: '#1A1A2E', bg: '#FFD93D' },
 ];
 
 async function writeTempQR(base64data, typeId = 'qr') {
+  const payload = stripDataUrlToBase64Payload(base64data);
   const path = `${FileSystem.cacheDirectory}qr_${typeId}_${Date.now()}.png`;
-  await FileSystem.writeAsStringAsync(path, base64data, {
+  await FileSystem.writeAsStringAsync(path, payload, {
     encoding: FileSystem.EncodingType.Base64,
   });
   return path;
 }
 
 async function deleteTempFile(path) {
-  try { await FileSystem.deleteAsync(path, { idempotent: true }); } catch (_) {}
+  try {
+    await FileSystem.deleteAsync(path, { idempotent: true });
+  } catch (_) {}
 }
 
 export default function PreviewScreen({ route, navigation }) {
@@ -51,13 +60,16 @@ export default function PreviewScreen({ route, navigation }) {
   const { theme } = useTheme();
   const svgRef = useRef(null);
 
+  const setSvgRef = useCallback((ref) => {
+    svgRef.current = ref;
+  }, []);
+
   const [fgColor, setFgColor] = useState('#000000');
   const [bgColor, setBgColor] = useState('#FFFFFF');
   const [logo, setLogo] = useState(null);
   const [qrSize, setQrSize] = useState(220);
   const [loading, setLoading] = useState(null);
 
-  // Varsayılan tercihleri yükle
   useEffect(() => {
     getPreferences().then((prefs) => {
       setFgColor(prefs.defaultFgColor);
@@ -92,17 +104,32 @@ export default function PreviewScreen({ route, navigation }) {
 
   const pickLogo = async () => {
     await Haptics.selectionAsync();
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('İzin Gerekli', 'Fotoğraf galerisine erişim izni gerekiyor.');
+    const pickerOptions = {
+      mediaTypes: ['images'],
+      allowsEditing: Platform.OS === 'ios',
+      quality: 0.85,
+      ...(Platform.OS === 'ios' ? { aspect: [1, 1] } : {}),
+    };
+
+    if (Platform.OS === 'android') {
+      // Android 13+ sistem foto seçici çoğu zaman izin diyaloğu olmadan çalışır; allowsEditing kırılgandır.
+      pickerOptions.allowsEditing = false;
+      const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
+      if (result.canceled) return;
+      if (result.assets?.[0]?.uri) {
+        setLogo(result.assets[0].uri);
+        return;
+      }
+      Alert.alert('Logo seçilemedi', 'Görsel seçilemedi. Tekrar deneyin.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('İzin gerekli', 'Fotoğraf galerisine erişim için izin verin.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
     if (!result.canceled && result.assets?.[0]) {
       setLogo(result.assets[0].uri);
     }
@@ -110,25 +137,35 @@ export default function PreviewScreen({ route, navigation }) {
 
   const saveToGallery = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('İzin Gerekli', 'Galeriye kaydetmek için izin gerekiyor.');
+    const perm = await ensureMediaLibrarySavePermission();
+    if (!perm.ok) {
+      Alert.alert(
+        'İzin gerekli',
+        'Galeriye kaydetmek için fotoğraf / medya erişimine izin verin. Ayarlardan uygulama izinlerini açabilirsiniz.'
+      );
       return;
     }
-    if (!svgRef.current) return;
+    if (!svgRef.current) {
+      Alert.alert('Bekleyin', 'QR görüntüsü henüz hazır değil. Bir an sonra tekrar deneyin.');
+      return;
+    }
     setLoading('gallery');
     svgRef.current.toDataURL(async (data) => {
-      let path;
       try {
-        path = await writeTempQR(data, qrType.id);
-        await MediaLibrary.saveToLibraryAsync(path);
+        await savePngDataUrlToGallery(data, qrType.id);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast('QR kod galeriye kaydedildi!', 'success');
+        showToast('QR kod galeriye kaydedildi.', 'success');
       } catch (e) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        if (__DEV__) console.warn('[saveToGallery]', e);
+        const detail = e?.message || e?.code || '';
+        const msg =
+          e?.message === 'EMPTY_IMAGE_DATA'
+            ? 'QR görüntüsü oluşturulamadı.'
+            : `Galeriye kayıt başarısız. İzinleri kontrol edin.${detail ? `\n(${String(detail)})` : ''}`;
+        Alert.alert('Kaydedilemedi', msg);
         showToast('Galeriye kaydedilemedi.', 'error');
       } finally {
-        if (path) await deleteTempFile(path);
         setLoading(null);
       }
     });
@@ -170,7 +207,7 @@ export default function PreviewScreen({ route, navigation }) {
         bgColor,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast('Geçmişe kaydedildi!', 'success');
+      showToast('Geçmişe kaydedildi.', 'success');
     } catch (e) {
       showToast('Geçmişe kaydedilemedi.', 'error');
     } finally {
@@ -186,28 +223,49 @@ export default function PreviewScreen({ route, navigation }) {
   const isLoading = loading !== null;
 
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* QR Preview */}
-        <View style={styles.qrWrapper}>
+    <>
+      <ScreenContainer
+        scroll
+        edges={['bottom', 'left', 'right']}
+        contentContainerStyle={{
+          paddingTop: theme.spacing.md,
+          paddingBottom: theme.spacing.huge,
+        }}
+      >
+        {/* Önizleme */}
+        <AppCard
+          padding="lg"
+          style={{
+            marginBottom: theme.spacing.lg,
+            alignItems: 'center',
+            backgroundColor: theme.previewBg,
+            borderColor: theme.border,
+          }}
+        >
+          <AppText variant="sectionLabel" tone="secondary" style={{ marginBottom: theme.spacing.md, alignSelf: 'stretch' }}>
+            ÖNİZLEME
+          </AppText>
           <QRCodeDisplay
             value={qrValue}
             size={qrSize}
             color={fgColor}
             backgroundColor={bgColor}
             logo={logo}
-            getRef={(ref) => { svgRef.current = ref; }}
+            getRef={setSvgRef}
           />
-          <View style={styles.qrTypeRow}>
+          <View style={[styles.qrTypeRow, { gap: theme.spacing.xs, marginTop: theme.spacing.md }]}>
             <QRIcon icon={qrType.icon} size={16} />
-            <Text style={[styles.qrTypeLabel, { color: theme.textSecondary }]}>{qrType.label}</Text>
+            <AppText variant="subbody" tone="secondary">
+              {qrType.label}
+            </AppText>
           </View>
-        </View>
+        </AppCard>
 
-        {/* Customization Panel */}
-        <View style={[styles.panel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.panelTitle, { color: theme.text }]}>Özelleştirme</Text>
+        {/* Özelleştirme */}
+        <AppCard padding="lg" style={{ marginBottom: theme.spacing.lg }}>
+          <AppText variant="sectionLabel" tone="secondary" style={{ marginBottom: theme.spacing.md }}>
+            ÖZELLEŞTİRME
+          </AppText>
 
           <ColorSwatchRow
             label="QR Rengi"
@@ -222,11 +280,11 @@ export default function PreviewScreen({ route, navigation }) {
             onCustom={() => openCustomColor('bg')}
           />
 
-          {/* Slider */}
-          <View style={styles.sizeRow}>
-            <Text style={[styles.sizeLabel, { color: theme.textSecondary }]}>
-              QR Boyutu: <Text style={{ color: theme.text, fontWeight: '700' }}>{qrSize}px</Text>
-            </Text>
+          <View style={{ marginBottom: theme.spacing.md }}>
+            <AppText variant="subbody" tone="secondary" style={styles.sizeLabel}>
+              QR Boyutu:{' '}
+              <Text style={{ fontWeight: '700', color: theme.textPrimary }}>{qrSize}px</Text>
+            </AppText>
             <Slider
               style={styles.slider}
               minimumValue={150}
@@ -234,21 +292,29 @@ export default function PreviewScreen({ route, navigation }) {
               step={10}
               value={qrSize}
               onValueChange={setQrSize}
-              minimumTrackTintColor={theme.accent}
+              minimumTrackTintColor={theme.primary}
               maximumTrackTintColor={theme.border}
-              thumbTintColor={theme.accent}
+              thumbTintColor={theme.primary}
             />
           </View>
 
-          {/* Renk Şablonları */}
-          <View style={styles.sizeRow}>
-            <Text style={[styles.sizeLabel, { color: theme.textSecondary }]}>Hazır Şablonlar</Text>
-            <View style={styles.themesRow}>
+          <View style={{ marginBottom: theme.spacing.md }}>
+            <AppText variant="subbody" tone="secondary" style={styles.sizeLabel}>
+              Hazır şablonlar
+            </AppText>
+            <View style={[styles.themesRow, { gap: theme.spacing.sm, marginTop: theme.spacing.xs }]}>
               {COLOR_THEMES.map((ct) => (
                 <TouchableOpacity
                   key={ct.label}
-                  style={[styles.themeChip, { backgroundColor: ct.bg, borderColor: theme.border }]}
-                  onPress={() => { setFgColor(ct.fg); setBgColor(ct.bg); Haptics.selectionAsync(); }}
+                  style={[
+                    styles.themeChip,
+                    { backgroundColor: ct.bg, borderColor: theme.border, borderRadius: theme.radius.pill },
+                  ]}
+                  onPress={() => {
+                    setFgColor(ct.fg);
+                    setBgColor(ct.bg);
+                    Haptics.selectionAsync();
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.themeChipText, { color: ct.fg }]}>{ct.label}</Text>
@@ -257,40 +323,85 @@ export default function PreviewScreen({ route, navigation }) {
             </View>
           </View>
 
-          {/* Logo */}
           <TouchableOpacity
-            style={[styles.logoBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[
+              styles.logoBtn,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+                borderRadius: theme.radius.sm,
+                gap: theme.spacing.sm,
+                padding: theme.spacing.sm + 2,
+              },
+            ]}
             onPress={pickLogo}
             activeOpacity={0.8}
           >
             <Text style={{ fontSize: 20 }}>🖼️</Text>
-            <Text style={[styles.logoBtnText, { color: theme.text }]}>{logo ? 'Logo Değiştir' : 'Logo Ekle'}</Text>
-            {logo && (
-              <TouchableOpacity onPress={() => { setLogo(null); Haptics.selectionAsync(); }} style={styles.removeLogoBtn}>
-                <Text style={{ color: theme.error, fontSize: 12, fontWeight: '700' }}>✕ Kaldır</Text>
+            <AppText variant="bodyMedium" tone="primary" style={styles.logoBtnText}>
+              {logo ? 'Logo değiştir' : 'Logo ekle'}
+            </AppText>
+            {logo ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setLogo(null);
+                  Haptics.selectionAsync();
+                }}
+                style={styles.removeLogoBtn}
+              >
+                <AppText variant="caption" tone="error" style={{ fontWeight: '700' }}>
+                  Kaldır
+                </AppText>
               </TouchableOpacity>
-            )}
+            ) : null}
           </TouchableOpacity>
+        </AppCard>
+
+        {/* Dışa aktar */}
+        <View style={{ marginBottom: theme.spacing.lg }}>
+          <AppText variant="sectionLabel" tone="secondary" style={{ marginBottom: theme.spacing.md, paddingHorizontal: theme.spacing.xs }}>
+            KAYDET VE PAYLAŞ
+          </AppText>
+          <View style={[styles.actions, { gap: theme.spacing.md }]}>
+            <ActionButton
+              label="Galeriye kaydet"
+              icon="📥"
+              color={theme.primary}
+              textColor={theme.textOnPrimary}
+              loading={loading === 'gallery'}
+              disabled={isLoading}
+              onPress={saveToGallery}
+            />
+            <ActionButton
+              label="Paylaş"
+              icon="📤"
+              color={theme.surface}
+              textColor={theme.primary}
+              borderColor={theme.primary}
+              loading={loading === 'share'}
+              disabled={isLoading}
+              onPress={shareQR}
+            />
+            <ActionButton
+              label="Geçmişe kaydet"
+              icon="🗂️"
+              color={theme.surface}
+              textColor={theme.textPrimary}
+              borderColor={theme.border}
+              loading={loading === 'history'}
+              disabled={isLoading}
+              onPress={saveToHistory}
+            />
+          </View>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <ActionButton label="Galeriye Kaydet" icon="📥" color={theme.accent} textColor="#FFFFFF"
-            loading={loading === 'gallery'} disabled={isLoading} onPress={saveToGallery} />
-          <ActionButton label="Paylaş" icon="📤" color={theme.surface} textColor={theme.accent}
-            borderColor={theme.accent} loading={loading === 'share'} disabled={isLoading} onPress={shareQR} />
-          <ActionButton label="Geçmişe Kaydet" icon="🗂️" color={theme.surface} textColor={theme.text}
-            borderColor={theme.border} loading={loading === 'history'} disabled={isLoading} onPress={saveToHistory} />
-        </View>
-
-        {/* Yeni QR */}
-        <TouchableOpacity style={styles.newQRBtn} onPress={handleNewQR} activeOpacity={0.7}>
-          <Text style={[styles.newQRText, { color: theme.textMuted }]}>+ Yeni QR Kodu Oluştur</Text>
+        <TouchableOpacity style={styles.newQRBtn} onPress={handleNewQR} activeOpacity={0.7} hitSlop={8}>
+          <AppText variant="subbody" tone="tertiary" style={styles.newQRText}>
+            + Yeni QR kodu oluştur
+          </AppText>
         </TouchableOpacity>
+      </ScreenContainer>
 
-      </ScrollView>
-
-      {/* Toast */}
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -298,7 +409,6 @@ export default function PreviewScreen({ route, navigation }) {
         onHide={() => setToast((t) => ({ ...t, visible: false }))}
       />
 
-      {/* Custom Color Modal */}
       <Modal
         visible={customColorModal.visible}
         transparent
@@ -306,39 +416,49 @@ export default function PreviewScreen({ route, navigation }) {
         onRequestClose={() => setCustomColorModal({ visible: false, target: null })}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: theme.card }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Özel Renk</Text>
-            <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+          <View style={[styles.modalCard, { backgroundColor: theme.card, borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl }]}>
+            <AppText variant="title3" tone="primary" style={{ marginBottom: theme.spacing.sm }}>
+              Özel renk
+            </AppText>
+            <AppText variant="caption" tone="secondary" style={{ marginBottom: theme.spacing.lg }}>
               Hex renk kodu girin (örn. #FF6B6B)
-            </Text>
+            </AppText>
             <TextInput
-              style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.border, color: theme.text }]}
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: theme.inputBackground,
+                  borderColor: theme.border,
+                  color: theme.textPrimary,
+                  borderRadius: theme.radius.sm,
+                },
+              ]}
               value={customColorInput}
               onChangeText={setCustomColorInput}
               placeholder="#000000"
-              placeholderTextColor={theme.textMuted}
+              placeholderTextColor={theme.textTertiary}
               autoCapitalize="characters"
               maxLength={7}
             />
-            <View style={[styles.colorPreview, { backgroundColor: customColorInput }]} />
-            <View style={styles.modalButtons}>
+            <View style={[styles.colorPreview, { backgroundColor: customColorInput, borderRadius: theme.radius.sm }]} />
+            <View style={[styles.modalButtons, { gap: theme.spacing.md }]}>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: theme.surface }]}
+                style={[styles.modalBtn, { backgroundColor: theme.surface, borderRadius: theme.radius.sm }]}
                 onPress={() => setCustomColorModal({ visible: false, target: null })}
               >
-                <Text style={{ color: theme.text }}>İptal</Text>
+                <AppText variant="bodyMedium" tone="primary">İptal</AppText>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: theme.accent }]}
+                style={[styles.modalBtn, { backgroundColor: theme.primary, borderRadius: theme.radius.sm }]}
                 onPress={applyCustomColor}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Uygula</Text>
+                <AppText variant="button" tone="onPrimary">Uygula</AppText>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -347,49 +467,67 @@ function ActionButton({ label, icon, color, textColor, borderColor, loading, dis
     <TouchableOpacity
       style={[
         styles.actionBtn,
-        { backgroundColor: color, borderWidth: borderColor ? 1.5 : 0, borderColor },
-        disabled && styles.actionBtnDisabled,
+        {
+          backgroundColor: color,
+          borderWidth: borderColor ? 1.5 : 0,
+          borderColor: borderColor || 'transparent',
+          borderRadius: 14,
+          opacity: disabled ? 0.55 : 1,
+        },
       ]}
       onPress={onPress}
       activeOpacity={0.85}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
     >
-      {loading
-        ? <ActivityIndicator color={textColor} size="small" />
-        : <Text style={[styles.actionBtnText, { color: textColor }]}>{icon}  {label}</Text>}
+      {loading ? (
+        <ActivityIndicator color={textColor} size="small" />
+      ) : (
+        <Text style={[styles.actionBtnText, { color: textColor }]}>
+          {icon}  {label}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { padding: 20, paddingBottom: 40 },
-  qrWrapper: { alignItems: 'center', marginBottom: 24 },
-  qrTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
-  qrTypeLabel: { fontSize: 14 },
-  panel: { borderRadius: 16, borderWidth: 1, padding: 18, marginBottom: 20 },
-  panelTitle: { fontSize: 17, fontWeight: '700', marginBottom: 16 },
-  sizeRow: { marginBottom: 14 },
-  sizeLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4, marginLeft: 2 },
+  qrTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sizeLabel: {
+    fontWeight: '600',
+    marginBottom: 4,
+    marginLeft: 2,
+  },
   slider: { width: '100%', height: 40 },
-  logoBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, borderWidth: 1 },
+  logoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
   logoBtnText: { flex: 1, fontSize: 14, fontWeight: '600' },
   removeLogoBtn: { paddingHorizontal: 8 },
-  actions: { gap: 12 },
-  actionBtn: { paddingVertical: 15, borderRadius: 14, alignItems: 'center', minHeight: 52, justifyContent: 'center' },
-  actionBtnDisabled: { opacity: 0.6 },
+  actions: {},
+  actionBtn: {
+    paddingVertical: 15,
+    alignItems: 'center',
+    minHeight: 52,
+    justifyContent: 'center',
+  },
   actionBtnText: { fontSize: 15, fontWeight: '700' },
-  themesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  themeChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  themesRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  themeChip: { paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1 },
   themeChipText: { fontSize: 12, fontWeight: '700' },
   newQRBtn: { alignItems: 'center', paddingVertical: 20 },
-  newQRText: { fontSize: 14, fontWeight: '600' },
+  newQRText: { fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
-  modalSubtitle: { fontSize: 13, marginBottom: 16 },
-  modalInput: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginBottom: 12 },
-  colorPreview: { height: 40, borderRadius: 10, marginBottom: 16 },
-  modalButtons: { flexDirection: 'row', gap: 12 },
-  modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  modalCard: { padding: 24, paddingBottom: 40 },
+  modalInput: { borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginBottom: 12 },
+  colorPreview: { height: 40, marginBottom: 16 },
+  modalButtons: { flexDirection: 'row' },
+  modalBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
 });

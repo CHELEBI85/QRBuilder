@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SubscriptionProvider } from './src/context/SubscriptionContext';
+import AppErrorBoundary from './src/components/AppErrorBoundary';
 import AppNavigator from './src/navigation/AppNavigator';
 
 function Root() {
@@ -23,11 +24,13 @@ function Root() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <SubscriptionProvider>
-          <Root />
-        </SubscriptionProvider>
-      </ThemeProvider>
+      <AppErrorBoundary>
+        <ThemeProvider>
+          <SubscriptionProvider>
+            <Root />
+          </SubscriptionProvider>
+        </ThemeProvider>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }
