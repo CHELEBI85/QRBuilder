@@ -4,6 +4,7 @@ import { SUBSCRIPTION_SKUS } from '../constants/subscription';
 
 const SKUS = [SUBSCRIPTION_SKUS.MONTHLY, SUBSCRIPTION_SKUS.YEARLY];
 let initDone = false;
+let initFailed = false;
 
 /** Expo Go yerel modül içermez; react-native-iap NitroModules gerektirir — sadece dev/standalone build'de yükle. */
 let rniapPromise = null;
@@ -37,12 +38,15 @@ export const isIAPSupported = () =>
  */
 export async function initIAP() {
   if (!isIAPSupported()) return { ok: false, error: 'platform' };
+  if (initDone) return { ok: true };
+  if (initFailed) return { ok: false, error: 'previously_failed' };
   const RNIap = await loadRNIap();
   try {
     await RNIap.initConnection();
     initDone = true;
     return { ok: true };
   } catch (e) {
+    initFailed = true;
     console.warn('[IAP] initConnection failed:', e?.message);
     return { ok: false, error: e?.message };
   }
@@ -73,7 +77,7 @@ export async function checkIsSubscribed() {
   if (!isIAPSupported()) return false;
   if (!initDone) {
     const r = await initIAP();
-    if (!r.ok) return false;
+    if (!r.ok) return false; // initFailed flag set → sonraki çağrılar tekrar denemez
   }
   const RNIap = await loadRNIap();
   try {

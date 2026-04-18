@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   View,
   Text,
   TouchableOpacity,
@@ -16,8 +17,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import ScreenContainer from '../components/ScreenContainer';
 import AppText from '../components/AppText';
-import AppCard from '../components/AppCard';
 import LoadingState from '../components/LoadingState';
+import { AppButton, SectionCard } from '../components/ui';
 
 export default function ScannerScreen() {
   const { theme } = useTheme();
@@ -25,12 +26,45 @@ export default function ScannerScreen() {
   const [scanned, setScanned] = useState(false);
   const [result, setResult] = useState(null);
   const [torchOn, setTorchOn] = useState(false);
+  const [facing, setFacing] = useState('back');
+
+  const scanLineY = useRef(new Animated.Value(0)).current;
+  const successScale = useRef(new Animated.Value(0)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
+
+  const frameSize = FRAME;
+  const scanLineRange = frameSize - 26;
+
+  useEffect(() => {
+    if (scanned) return;
+    scanLineY.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanLineY, { toValue: scanLineRange, duration: 1650, useNativeDriver: true }),
+        Animated.timing(scanLineY, { toValue: 0, duration: 1650, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [scanned, scanLineRange, scanLineY]);
+
+  const triggerSuccess = () => {
+    successScale.setValue(0.85);
+    successOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(successOpacity, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.spring(successScale, { toValue: 1, friction: 6, tension: 140, useNativeDriver: true }),
+    ]).start(() => {
+      Animated.timing(successOpacity, { toValue: 0, duration: 260, delay: 520, useNativeDriver: true }).start();
+    });
+  };
 
   const handleBarCodeScanned = ({ data }) => {
     if (scanned) return;
     setScanned(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setResult(data);
+    triggerSuccess();
   };
 
   const reset = () => {
@@ -92,7 +126,7 @@ export default function ScannerScreen() {
 
     return (
       <ScreenContainer scroll={false} edges={['top', 'left', 'right']} contentContainerStyle={styles.permissionLoading}>
-        <AppCard padding="lg" style={styles.permissionCard}>
+        <SectionCard padding="lg" style={styles.permissionCard}>
           <Text style={styles.permissionEmoji} accessible={false}>
             {permanentlyDenied ? '🔒' : '📷'}
           </Text>
@@ -104,88 +138,155 @@ export default function ScannerScreen() {
               ? 'QR kodu tarayabilmek için sistem ayarlarından bu uygulama için kamera iznini açın.'
               : 'QR kodları okumak için kamera erişimine izin vermeniz gerekiyor. Verileriniz yalnızca cihazınızda işlenir.'}
           </AppText>
-          <TouchableOpacity
-            style={[
-              styles.primaryBtn,
-              {
-                backgroundColor: theme.primary,
-                borderRadius: theme.radius.sm + 2,
-                paddingVertical: theme.spacing.md,
-                marginTop: theme.spacing.lg,
-              },
-            ]}
-            onPress={permanentlyDenied ? openAppSettings : requestPermission}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={permanentlyDenied ? 'Sistem ayarlarını aç' : 'Kamera izni iste'}
-          >
-            <AppText variant="button" tone="onPrimary" style={styles.primaryBtnLabel}>
-              {permanentlyDenied ? 'Ayarlara git' : 'İzin ver'}
-            </AppText>
-          </TouchableOpacity>
-        </AppCard>
+          <View style={{ marginTop: theme.spacing.lg }}>
+            <AppButton
+              label={permanentlyDenied ? 'Ayarlara git' : 'İzin ver'}
+              onPress={permanentlyDenied ? openAppSettings : requestPermission}
+              variant="primary"
+            />
+          </View>
+        </SectionCard>
       </ScreenContainer>
     );
   }
 
   const detected = detectType(result);
   const isURL = result && (result.startsWith('http') || result.startsWith('www'));
+  const topOverlayBg = { backgroundColor: 'rgba(11,16,32,0.55)', borderBottomColor: theme.border };
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.lg, paddingBottom: theme.spacing.md }]}>
-        <AppText variant="title2" tone="primary" accessibilityRole="header">
-          QR Tara
-        </AppText>
-        <TouchableOpacity
-          style={[
-            styles.torchBtn,
-            {
-              backgroundColor: torchOn ? theme.primary : theme.card,
-              borderColor: theme.border,
-              borderRadius: theme.radius.sm,
-            },
-          ]}
-          onPress={() => setTorchOn((v) => !v)}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={torchOn ? 'Flaşı kapat' : 'Flaşı aç'}
-          accessibilityState={{ selected: torchOn }}
-        >
-          <MaterialIcons name={torchOn ? 'flash-on' : 'flash-off'} size={22} color={torchOn ? theme.textOnPrimary : theme.textSecondary} />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
+      {/* Kamera arka planı: full-screen */}
+      <View style={styles.cameraStage}>
+        <CameraView
+          style={styles.camera}
+          facing={facing}
+          enableTorch={torchOn}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={handleBarCodeScanned}
+        />
 
-      {!scanned ? (
-        <View style={styles.cameraWrapper}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            enableTorch={torchOn}
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={handleBarCodeScanned}
-          />
+        {/* Üst overlay header */}
+        <View style={[styles.topOverlay, topOverlayBg]}>
+          <View style={[styles.topRow, { paddingHorizontal: theme.spacing.xl }]}>
+            <View style={styles.titleBlock}>
+              <AppText variant="title3" tone="onPrimary" style={styles.overlayTitle} accessibilityRole="header">
+                QR Tara
+              </AppText>
+              <AppText variant="caption" tone="onPrimary" style={styles.overlaySubtitle} numberOfLines={1}>
+                Kamera yalnızca cihazında çalışır, veri gönderilmez.
+              </AppText>
+            </View>
+
+            <View style={[styles.topActions, { gap: theme.spacing.sm }]}>
+              <TouchableOpacity
+                style={[
+                  styles.iconBtn,
+                  {
+                    backgroundColor: torchOn ? theme.primary : 'rgba(255,255,255,0.10)',
+                    borderColor: 'rgba(255,255,255,0.14)',
+                    borderRadius: theme.radius.md,
+                  },
+                ]}
+                onPress={() => setTorchOn((v) => !v)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={torchOn ? 'Flaşı kapat' : 'Flaşı aç'}
+                accessibilityState={{ selected: torchOn }}
+              >
+                <MaterialIcons name={torchOn ? 'flash-on' : 'flash-off'} size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.iconBtn,
+                  {
+                    backgroundColor: 'rgba(255,255,255,0.10)',
+                    borderColor: 'rgba(255,255,255,0.14)',
+                    borderRadius: theme.radius.md,
+                  },
+                ]}
+                onPress={() => setFacing((v) => (v === 'back' ? 'front' : 'back'))}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Kamerayı değiştir"
+              >
+                <MaterialIcons name="cameraswitch" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Tarama overlay */}
+        {!scanned ? (
           <View style={styles.overlay} pointerEvents="none">
             <View style={styles.frame}>
               <View style={[styles.corner, styles.cornerTL, { borderColor: theme.primary }]} />
               <View style={[styles.corner, styles.cornerTR, { borderColor: theme.primary }]} />
               <View style={[styles.corner, styles.cornerBL, { borderColor: theme.primary }]} />
               <View style={[styles.corner, styles.cornerBR, { borderColor: theme.primary }]} />
+
+              <View style={[styles.frameInner, { borderColor: 'rgba(255,255,255,0.10)' }]} />
+
+              <Animated.View
+                style={[
+                  styles.scanLine,
+                  {
+                    backgroundColor: theme.primary,
+                    transform: [{ translateY: scanLineY }],
+                  },
+                ]}
+              />
+            </View>
+
+            <View
+              style={[
+                styles.scanHintPanel,
+                {
+                  backgroundColor: 'rgba(11,16,32,0.62)',
+                  borderColor: 'rgba(255,255,255,0.12)',
+                  borderRadius: theme.radius.lg,
+                },
+              ]}
+            >
+              <View style={styles.hintRow}>
+                <MaterialIcons name="center-focus-weak" size={18} color="#FFFFFF" />
+                <AppText variant="subbody" tone="onPrimary" style={styles.hintTitle}>
+                  QR kodu çerçeve içine hizalayın
+                </AppText>
+              </View>
+              <AppText variant="caption" tone="onPrimary" style={styles.hintSub}>
+                Parlamayı azaltmak için telefonu dik tutun. Gerekirse flaşı açın.
+              </AppText>
             </View>
           </View>
-          <View style={[styles.scanHintPill, { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: theme.radius.pill }]}>
-            <AppText variant="subbody" tone="onPrimary" style={styles.scanHintText}>
-              QR kodu çerçeve içine hizalayın
-            </AppText>
+        ) : null}
+
+        {/* Success feedback */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.successOverlay,
+            {
+              opacity: successOpacity,
+              transform: [{ scale: successScale }],
+            },
+          ]}
+        >
+          <View style={[styles.successBadge, { backgroundColor: 'rgba(11,16,32,0.72)' }]}>
+            <MaterialIcons name="check-circle" size={34} color={theme.success} />
           </View>
-        </View>
-      ) : (
+        </Animated.View>
+      </View>
+
+      {/* Sonuç paneli */}
+      {scanned ? (
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.resultScroll, { paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.huge, gap: theme.spacing.md }]}
         >
-          <AppCard padding="lg" style={styles.resultCard}>
+          <SectionCard padding="lg" style={styles.resultCard}>
             <View style={[styles.resultTypeBadge, { backgroundColor: theme.surfaceSecondary, borderRadius: theme.radius.sm }]}>
               <Text style={styles.resultEmoji} accessible={false}>
                 {detected?.icon}
@@ -209,72 +310,36 @@ export default function ScannerScreen() {
             </AppText>
 
             <View style={[styles.resultActions, { gap: theme.spacing.sm }]}>
-              {isURL && (
-                <TouchableOpacity
-                  style={[
-                    styles.resultBtn,
-                    {
-                      backgroundColor: theme.primary,
-                      borderRadius: theme.radius.sm,
-                      paddingVertical: theme.spacing.md,
-                    },
-                  ]}
-                  onPress={openLink}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Bağlantıyı tarayıcıda aç"
-                >
-                  <MaterialIcons name="open-in-browser" size={18} color={theme.textOnPrimary} />
-                  <AppText variant="button" tone="onPrimary">
-                    Aç
-                  </AppText>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[
-                  styles.resultBtn,
-                  styles.resultBtnOutline,
-                  {
-                    borderColor: theme.primary,
-                    borderRadius: theme.radius.sm,
-                    paddingVertical: theme.spacing.md,
-                    backgroundColor: theme.surface,
-                  },
-                ]}
-                onPress={shareResult}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Metni paylaş"
-              >
-                <MaterialIcons name="share" size={18} color={theme.primary} />
-                <AppText variant="button" tone="primary" style={{ color: theme.primary }}>
-                  Paylaş
-                </AppText>
-              </TouchableOpacity>
+              {isURL ? (
+                <View style={{ flex: 1 }}>
+                  <AppButton
+                    label="Aç"
+                    onPress={openLink}
+                    variant="primary"
+                    leftIcon={<MaterialIcons name="open-in-browser" size={18} color={theme.textOnPrimary} />}
+                  />
+                </View>
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <AppButton
+                  label="Paylaş"
+                  onPress={shareResult}
+                  variant="outline"
+                  leftIcon={<MaterialIcons name="share" size={18} color={theme.primary} />}
+                />
+              </View>
             </View>
-          </AppCard>
+          </SectionCard>
 
-          <TouchableOpacity
-            style={[
-              styles.scanAgainBtn,
-              {
-                backgroundColor: theme.primary,
-                borderRadius: theme.radius.sm + 2,
-                paddingVertical: theme.spacing.md,
-              },
-            ]}
+          <AppButton
+            label="Tekrar tara"
             onPress={reset}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Yeni QR kod tara"
-          >
-            <MaterialIcons name="qr-code-scanner" size={22} color={theme.textOnPrimary} />
-            <AppText variant="button" tone="onPrimary" style={styles.scanAgainText}>
-              Tekrar tara
-            </AppText>
-          </TouchableOpacity>
+            variant="primary"
+            size="lg"
+            leftIcon={<MaterialIcons name="qr-code-scanner" size={22} color={theme.textOnPrimary} />}
+          />
         </ScrollView>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -283,7 +348,7 @@ const FRAME = 240;
 const CORNER = 24;
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#000' },
   permissionLoading: {
     flex: 1,
     justifyContent: 'center',
@@ -310,28 +375,46 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  primaryBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
+  cameraStage: { flex: 1 },
+  camera: { flex: 1 },
+  topOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 8,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  primaryBtnLabel: {
-    textAlign: 'center',
-  },
-  header: {
+  topRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
+  },
+  overlayTitle: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  overlaySubtitle: {
+    color: 'rgba(255,255,255,0.80)',
+    marginTop: 2,
+  },
+  topActions: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  torchBtn: {
+  iconBtn: {
     width: 44,
     height: 44,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cameraWrapper: { flex: 1, position: 'relative' },
-  camera: { flex: 1 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -341,25 +424,69 @@ const styles = StyleSheet.create({
     width: FRAME,
     height: FRAME,
   },
+  frameInner: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+  },
   corner: {
     position: 'absolute',
     width: CORNER,
     height: CORNER,
   },
-  cornerTL: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 8 },
-  cornerTR: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 8 },
-  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 8 },
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 8 },
-  scanHintPill: {
+  cornerTL: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 14 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 14 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 14 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 14 },
+  scanLine: {
     position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    left: 16,
+    right: 16,
+    height: 2,
+    top: 12,
+    borderRadius: 2,
+    opacity: 0.9,
   },
-  scanHintText: {
+  scanHintPanel: {
+    position: 'absolute',
+    bottom: 36,
+    alignSelf: 'center',
+    width: Math.min(360, FRAME + 60),
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  hintTitle: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '800',
+    flexShrink: 1,
+  },
+  hintSub: {
+    color: 'rgba(255,255,255,0.78)',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  successOverlay: {
+    position: 'absolute',
+    top: '45%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   resultScroll: { flexGrow: 1 },
   resultCard: {
@@ -393,24 +520,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   resultActions: { flexDirection: 'row', flexWrap: 'wrap' },
-  resultBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minWidth: 120,
-  },
-  resultBtnOutline: {
-    borderWidth: 1.5,
-  },
-  scanAgainBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    minHeight: 52,
-  },
   scanAgainText: {
     textAlign: 'center',
   },

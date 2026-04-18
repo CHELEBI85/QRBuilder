@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Switch, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
+import { View, Switch, StyleSheet, TouchableOpacity, Linking, Alert, Image } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
@@ -9,13 +9,14 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { getPreferences, savePreferences } from '../utils/preferences';
 import ScreenContainer from '../components/ScreenContainer';
 import AppText from '../components/AppText';
-import AppCard from '../components/AppCard';
-import SectionHeader from '../components/SectionHeader';
+import { ColorSwatch, PreviewCard, ScreenHeader, SectionCard, SettingRow, UpgradeCard } from '../components/ui';
 
 const COLOR_PRESETS = ['#000000', '#6C63FF', '#FF6B6B', '#2D6A4F', '#0077B6', '#FFD93D'];
 const BG_PRESETS = ['#FFFFFF', '#1A1A2E', '#F5F5F8', '#FFF8E7', '#E8F4FD', '#0F0F1A'];
 
 const APP_VERSION = Constants.expoConfig?.version ?? Constants.manifest?.version ?? '1.0.0';
+const LOGO_DARK = require('../../assets/siyahlogo.png');
+const LOGO_LIGHT = require('../../assets/beyazlogo.png');
 
 export default function SettingsScreen({ navigation }) {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -64,70 +65,53 @@ export default function SettingsScreen({ navigation }) {
 
   return (
     <ScreenContainer contentContainerStyle={{ paddingBottom: theme.spacing.huge }}>
-      <SectionHeader
-        title="Ayarlar"
-        subtitle="Tema, varsayılanlar ve uygulama bilgisi"
-        style={{ paddingHorizontal: 0, paddingTop: theme.spacing.sm, marginBottom: theme.spacing.sm }}
-      />
+      <ScreenHeader title="Ayarlar" subtitle="Görünüm, varsayılanlar ve hesap" />
 
-      <AppCard onPress={goToPaywall} activeOpacity={0.85} padding="lg" style={sectionGap}>
-        <View style={styles.row}>
-          <View style={[styles.rowLeft, { gap: theme.spacing.md }]}>
-            <View style={[styles.rowIconWrap, { backgroundColor: theme.primarySoft, borderRadius: theme.radius.sm }]}>
-              <MaterialIcons name="workspace-premium" size={22} color={theme.primary} />
-            </View>
-            <View style={styles.rowTextBlock}>
-              <View style={styles.premiumTitleRow}>
-                <AppText variant="bodyMedium" tone="primary">
-                  Premium
-                </AppText>
-                {isPremium ? (
-                  <View style={[styles.premiumBadge, { backgroundColor: `${theme.success}22` }]}>
-                    <MaterialIcons name="check-circle" size={14} color={theme.success} />
-                    <AppText variant="caption" style={{ color: theme.success, fontWeight: '600' }}>
-                      Aktif
-                    </AppText>
-                  </View>
-                ) : null}
-              </View>
-              <AppText variant="caption" tone="secondary" style={styles.rowDesc}>
-                {isPremium ? 'Tüm QR türlerine erişiminiz var' : 'Tüm QR türlerinin kilidini açın'}
+      {isPremium ? (
+        <SettingRow
+          icon="workspace-premium"
+          title="Premium"
+          subtitle="Tüm QR türlerine erişiminiz var"
+          onPress={goToPaywall}
+          style={sectionGap}
+          right={
+            <View style={[styles.premiumBadge, { backgroundColor: `${theme.success}22` }]}>
+              <MaterialIcons name="check-circle" size={14} color={theme.success} />
+              <AppText variant="caption" style={{ color: theme.success, fontWeight: '700' }}>
+                Aktif
               </AppText>
             </View>
-          </View>
-          <MaterialIcons name="chevron-right" size={24} color={theme.textTertiary} accessible={false} />
+          }
+        />
+      ) : (
+        <View style={sectionGap}>
+          <UpgradeCard onPressUpgrade={goToPaywall} />
         </View>
-      </AppCard>
+      )}
 
-      <AppCard padding="lg" style={sectionGap}>
+      <SectionCard padding="lg" style={sectionGap}>
         <AppText variant="sectionLabel" tone="secondary" style={styles.sectionLabelSpacing}>
           GÖRÜNÜM
         </AppText>
-        <View style={styles.row}>
-          <View style={[styles.rowLeft, { gap: theme.spacing.md }]}>
-            <View style={[styles.rowIconWrap, { backgroundColor: theme.surfaceSecondary, borderRadius: theme.radius.sm }]}>
-              <MaterialIcons name={isDark ? 'dark-mode' : 'light-mode'} size={22} color={theme.primary} />
-            </View>
-            <View style={styles.rowTextBlock}>
-              <AppText variant="bodyMedium" tone="primary">
-                {isDark ? 'Koyu tema' : 'Açık tema'}
-              </AppText>
-              <AppText variant="caption" tone="secondary" style={styles.rowDesc}>
-                Sistem görünümüne uyum için anında değişir
-              </AppText>
-            </View>
-          </View>
-          <Switch
-            value={isDark}
-            onValueChange={toggleTheme}
-            trackColor={{ false: theme.border, true: theme.primary }}
-            thumbColor={theme.textOnPrimary}
-            accessibilityLabel={isDark ? 'Koyu temayı kapat' : 'Koyu temayı aç'}
-          />
-        </View>
-      </AppCard>
+        <SettingRow
+          icon={isDark ? 'dark-mode' : 'light-mode'}
+          title={isDark ? 'Koyu tema' : 'Açık tema'}
+          subtitle="Sistem görünümüne uyum için anında değişir"
+          chevron={false}
+          style={styles.settingRowInner}
+          right={
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: theme.border, true: theme.primary }}
+              thumbColor={theme.textOnPrimary}
+              accessibilityLabel={isDark ? 'Koyu temayı kapat' : 'Koyu temayı aç'}
+            />
+          }
+        />
+      </SectionCard>
 
-      <AppCard padding="lg" style={sectionGap}>
+      <SectionCard padding="lg" style={sectionGap}>
         <AppText variant="sectionLabel" tone="secondary" style={styles.sectionLabelSpacing}>
           VARSAYILAN QR
         </AppText>
@@ -140,23 +124,12 @@ export default function SettingsScreen({ navigation }) {
         </AppText>
         <View style={[styles.colorRow, { gap: theme.spacing.sm, marginBottom: theme.spacing.lg }]}>
           {COLOR_PRESETS.map((c) => (
-            <TouchableOpacity
+            <ColorSwatch
               key={c}
-              accessibilityRole="button"
-              accessibilityLabel={`Ön plan rengi ${c}`}
-              accessibilityState={{ selected: prefs.defaultFgColor === c }}
-              style={[
-                styles.colorDot,
-                {
-                  backgroundColor: c,
-                  borderColor: theme.border,
-                  borderRadius: theme.radius.sm,
-                  width: 36,
-                  height: 36,
-                },
-                prefs.defaultFgColor === c && { borderWidth: 3, borderColor: theme.primary },
-              ]}
+              color={c}
+              selected={prefs.defaultFgColor === c}
               onPress={() => updatePref('defaultFgColor', c)}
+              accessibilityLabel={`Ön plan rengi ${c}`}
             />
           ))}
         </View>
@@ -166,23 +139,12 @@ export default function SettingsScreen({ navigation }) {
         </AppText>
         <View style={[styles.colorRow, { gap: theme.spacing.sm, marginBottom: theme.spacing.lg }]}>
           {BG_PRESETS.map((c) => (
-            <TouchableOpacity
+            <ColorSwatch
               key={c}
-              accessibilityRole="button"
-              accessibilityLabel={`Arka plan rengi ${c}`}
-              accessibilityState={{ selected: prefs.defaultBgColor === c }}
-              style={[
-                styles.colorDot,
-                {
-                  backgroundColor: c,
-                  borderColor: theme.border,
-                  borderRadius: theme.radius.sm,
-                  width: 36,
-                  height: 36,
-                },
-                prefs.defaultBgColor === c && { borderWidth: 3, borderColor: theme.primary },
-              ]}
+              color={c}
+              selected={prefs.defaultBgColor === c}
               onPress={() => updatePref('defaultBgColor', c)}
+              accessibilityLabel={`Arka plan rengi ${c}`}
             />
           ))}
         </View>
@@ -191,9 +153,11 @@ export default function SettingsScreen({ navigation }) {
           <AppText variant="subbody" tone="secondary" style={styles.prefLabel}>
             Varsayılan boyut
           </AppText>
-          <AppText variant="subbody" tone="primary" style={styles.sizeValue}>
-            {prefs.defaultQrSize}px
-          </AppText>
+          <View style={[styles.sizePill, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border, borderRadius: theme.radius.pill }]}>
+            <AppText variant="caption" tone="secondary" style={styles.sizePillText}>
+              {prefs.defaultQrSize}px
+            </AppText>
+          </View>
         </View>
         <Slider
           style={styles.slider}
@@ -209,111 +173,63 @@ export default function SettingsScreen({ navigation }) {
           accessibilityLabel="Varsayılan QR boyutu"
         />
 
-        <View
-          style={[
-            styles.prefPreview,
-            {
-              backgroundColor: prefs.defaultBgColor,
-              borderColor: theme.border,
-              borderRadius: theme.radius.sm,
-              padding: theme.spacing.sm + 2,
-              gap: theme.spacing.sm,
-              marginTop: theme.spacing.xs,
-            },
-          ]}
-        >
-          <View style={[styles.prefPreviewDot, { backgroundColor: prefs.defaultFgColor }]} />
-          <View style={[styles.prefPreviewDot, { backgroundColor: prefs.defaultFgColor, opacity: 0.5 }]} />
-          <View style={[styles.prefPreviewDot, { backgroundColor: prefs.defaultFgColor }]} />
-          <AppText variant="caption" style={[styles.prefPreviewText, { color: prefs.defaultFgColor }]}>
-            Önizleme
-          </AppText>
+        <View style={{ marginTop: theme.spacing.sm }}>
+          <PreviewCard fgColor={prefs.defaultFgColor} bgColor={prefs.defaultBgColor} sizePx={prefs.defaultQrSize} />
         </View>
-      </AppCard>
+      </SectionCard>
 
-      <AppCard padding="lg" style={sectionGap}>
+      <SectionCard padding="lg" style={sectionGap}>
         <AppText variant="sectionLabel" tone="secondary" style={styles.sectionLabelSpacing}>
           UYGULAMA
         </AppText>
 
-        <View style={styles.aboutHero}>
-          <View
+        <View style={[styles.aboutHero, { gap: theme.spacing.sm }]}>
+          <Image
+            source={isDark ? LOGO_DARK : LOGO_LIGHT}
             style={[
-              styles.appIconWrapper,
+              styles.aboutLogoSmall,
               {
-                backgroundColor: theme.primary,
                 borderRadius: theme.radius.lg,
-                marginBottom: theme.spacing.md,
               },
             ]}
-          >
-            <MaterialIcons name="qr-code-2" size={40} color={theme.textOnPrimary} />
+            resizeMode="contain"
+          />
+          <View style={styles.aboutText}>
+            <View style={styles.aboutTitleRow}>
+              <AppText variant="headline" tone="primary" style={styles.appNameCompact}>
+                QRBuilder
+              </AppText>
+              <AppText variant="caption" tone="tertiary">
+                v{APP_VERSION}
+              </AppText>
+            </View>
+            <AppText variant="caption" tone="tertiary" style={styles.appDescCompact}>
+              QR oluşturma, özelleştirme ve tarama — tek uygulamada.
+            </AppText>
           </View>
-          <AppText variant="title2" tone="primary" style={styles.appName}>
-            QRBuilder
-          </AppText>
-          <AppText variant="caption" tone="tertiary" style={styles.appVersion}>
-            Sürüm {APP_VERSION}
-          </AppText>
-          <AppText variant="subbody" tone="secondary" style={styles.appDesc}>
-            QR oluşturma, özelleştirme ve tarama — tek uygulamada.
-          </AppText>
-          <AppText variant="caption" tone="tertiary" style={styles.trustLine}>
-            Tercihleriniz yalnızca bu cihazda saklanır.
-          </AppText>
         </View>
+      </SectionCard>
 
-        <View style={[styles.divider, { backgroundColor: theme.divider, marginVertical: theme.spacing.md }]} />
-
-        <TouchableOpacity
-          style={[styles.linkRow, { paddingVertical: theme.spacing.sm, marginHorizontal: -theme.spacing.xs }]}
+      <SectionCard padding="lg" style={sectionGap}>
+        <AppText variant="sectionLabel" tone="secondary" style={styles.sectionLabelSpacing}>
+          DESTEK & GİZLİLİK
+        </AppText>
+        <SettingRow
+          icon="mail-outline"
+          title="Geri bildirim"
+          subtitle="Öneri veya sorun bildirin"
           onPress={openFeedbackMail}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel="Geri bildirim e-postası gönder"
-        >
-          <View style={[styles.rowIconWrap, { backgroundColor: theme.surfaceSecondary, borderRadius: theme.radius.sm }]}>
-            <MaterialIcons name="mail-outline" size={22} color={theme.primary} />
-          </View>
-          <View style={styles.linkRowText}>
-            <AppText variant="bodyMedium" tone="primary">
-              Geri bildirim
-            </AppText>
-            <AppText variant="caption" tone="tertiary">
-              Öneri veya sorun bildirin
-            </AppText>
-          </View>
-          <MaterialIcons name="chevron-right" size={22} color={theme.textTertiary} accessible={false} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.linkRow,
-            {
-              marginTop: theme.spacing.xs,
-              paddingVertical: theme.spacing.sm,
-              marginHorizontal: -theme.spacing.xs,
-            },
-          ]}
+          style={styles.settingRowInner}
+        />
+        <View style={[styles.divider, { backgroundColor: theme.divider, marginVertical: theme.spacing.md }]} />
+        <SettingRow
+          icon="policy"
+          title="Gizlilik özeti"
+          subtitle="Verileriniz nasıl işlenir?"
           onPress={showPrivacySummary}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel="Gizlilik özeti"
-        >
-          <View style={[styles.rowIconWrap, { backgroundColor: theme.surfaceSecondary, borderRadius: theme.radius.sm }]}>
-            <MaterialIcons name="policy" size={22} color={theme.primary} />
-          </View>
-          <View style={styles.linkRowText}>
-            <AppText variant="bodyMedium" tone="primary">
-              Gizlilik özeti
-            </AppText>
-            <AppText variant="caption" tone="tertiary">
-              Verileriniz nasıl işlenir?
-            </AppText>
-          </View>
-          <MaterialIcons name="chevron-right" size={22} color={theme.textTertiary} accessible={false} />
-        </TouchableOpacity>
-      </AppCard>
+          style={styles.settingRowInner}
+        />
+      </SectionCard>
     </ScreenContainer>
   );
 }
@@ -360,6 +276,9 @@ const styles = StyleSheet.create({
   sectionLabelSpacing: {
     marginBottom: 14,
   },
+  settingRowInner: {
+    marginTop: 6,
+  },
   prefHint: {
     marginBottom: 16,
     marginTop: -4,
@@ -377,66 +296,48 @@ const styles = StyleSheet.create({
   sizeValue: {
     fontWeight: '700',
   },
+  sizePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sizePillText: {
+    fontWeight: '800',
+  },
   colorRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  colorDot: {},
   slider: {
     width: '100%',
     height: 40,
   },
-  prefPreview: {
+  aboutHero: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
   },
-  prefPreviewDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
+  aboutLogoSmall: {
+    width: 64,
+    height: 64,
   },
-  prefPreviewText: {
-    fontWeight: '600',
-    marginLeft: 4,
+  aboutText: {
+    flex: 1,
+    minWidth: 0,
   },
-  aboutHero: {
-    alignItems: 'center',
+  aboutTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  appIconWrapper: {
-    width: 72,
-    height: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
+  appNameCompact: {
+    fontWeight: '900',
   },
-  appName: {
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  appVersion: {
-    marginBottom: 8,
-  },
-  appDesc: {
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 8,
-  },
-  trustLine: {
-    textAlign: 'center',
-    marginTop: 8,
+  appDescCompact: {
+    marginTop: 4,
     lineHeight: 18,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 10,
-  },
-  linkRowText: {
-    flex: 1,
-    minWidth: 0,
   },
 });

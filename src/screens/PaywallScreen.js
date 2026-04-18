@@ -3,17 +3,13 @@ import {
   View,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { PREMIUM_FEATURES } from '../constants/subscription';
 import ScreenContainer from '../components/ScreenContainer';
-import SectionHeader from '../components/SectionHeader';
 import AppText from '../components/AppText';
-import AppCard from '../components/AppCard';
+import { AppButton, BenefitList, OfferCard, PaywallHero } from '../components/ui';
 
 export default function PaywallScreen({ navigation, route }) {
   const { theme } = useTheme();
@@ -62,6 +58,10 @@ export default function PaywallScreen({ navigation, route }) {
   const priceText = monthlyProduct?.localizedPrice ?? '';
 
   const actionsDisabled = purchaseLoading || restoreLoading;
+  const contextTitle = qrType?.label ? `${qrType.label} türünün kilidini aç` : undefined;
+  const contextSubtitle = qrType?.label
+    ? `${qrType.label} ve diğer premium türlerle daha fazla senaryoyu saniyeler içinde paylaş.`
+    : undefined;
 
   return (
     <ScreenContainer
@@ -72,120 +72,46 @@ export default function PaywallScreen({ navigation, route }) {
         paddingBottom: theme.spacing.huge,
       }}
     >
-      <SectionHeader
-        title="Premium"
-        subtitle="Wi‑Fi, vCard, konum ve sosyal türler dahil — tek abonelikle sınırsız oluşturma."
-        style={{ paddingTop: theme.spacing.sm }}
+      <PaywallHero
+        style={{ marginBottom: theme.spacing.lg }}
+        contextTitle={contextTitle}
+        contextSubtitle={contextSubtitle}
       />
 
-      <AppCard padding="lg" style={[styles.heroCard, { marginBottom: theme.spacing.lg }]}>
-        <View
-          style={[
-            styles.heroIcon,
-            {
-              backgroundColor: theme.primarySoft,
-              borderRadius: theme.radius.lg,
-              marginBottom: theme.spacing.md,
-            },
-          ]}
-        >
-          <MaterialIcons name="workspace-premium" size={40} color={theme.primary} />
-        </View>
-        {priceText ? (
-          <View style={styles.priceRow}>
-            <AppText variant="title2" tone="primary" style={styles.priceAmount}>
-              {priceText}
-            </AppText>
-            <AppText variant="subbody" tone="secondary" style={styles.priceSuffix}>
-              {' '}
-              / ay
-            </AppText>
-          </View>
-        ) : (
-          <AppText variant="caption" tone="tertiary" style={{ marginBottom: theme.spacing.sm }}>
-            Fiyat Google Play’den yükleniyor…
-          </AppText>
-        )}
-        <AppText variant="caption" tone="tertiary" style={styles.trustLine}>
-          Ödeme Google Play üzerinden güvenle işlenir. İstediğiniz zaman aboneliği yönetebilirsiniz.
-        </AppText>
-      </AppCard>
+      <OfferCard
+        title="Aylık abonelik"
+        priceText={priceText}
+        periodText="/ ay"
+        loading={!priceText}
+        selected
+        style={{ marginBottom: theme.spacing.lg }}
+      />
 
-      <AppCard padding="lg" style={{ marginBottom: theme.spacing.lg }}>
-        <AppText variant="sectionLabel" tone="secondary" style={{ marginBottom: theme.spacing.md }}>
-          NELER DAHİL
-        </AppText>
-        {PREMIUM_FEATURES.map((f, i) => (
-          <View
-            key={i}
-            style={[
-              styles.featureRow,
-              { marginBottom: i < PREMIUM_FEATURES.length - 1 ? theme.spacing.md : 0 },
-            ]}
-          >
-            <MaterialIcons name="check-circle" size={22} color={theme.success} style={styles.featureIcon} />
-            <AppText variant="body" tone="primary" style={styles.featureText}>
-              {f}
-            </AppText>
-          </View>
-        ))}
-      </AppCard>
+      <BenefitList style={{ marginBottom: theme.spacing.lg }} />
 
       <View style={[styles.actions, { gap: theme.spacing.md }]}>
-        <TouchableOpacity
-          style={[
-            styles.subscribeBtn,
-            {
-              backgroundColor: theme.primary,
-              borderRadius: theme.radius.sm + 2,
-              opacity: actionsDisabled ? 0.55 : 1,
-              minHeight: 52,
-              paddingHorizontal: theme.spacing.lg,
-            },
-          ]}
+        <AppButton
+          label={priceText ? `${priceText} / ay — Abone ol` : 'Abone ol'}
           onPress={handleSubscribe}
+          variant="primary"
+          size="lg"
+          loading={purchaseLoading}
           disabled={actionsDisabled}
-          activeOpacity={0.85}
-          accessibilityRole="button"
           accessibilityLabel={priceText ? `${priceText} aylık abonelik satın al` : 'Abone ol'}
-          accessibilityState={{ disabled: actionsDisabled }}
-        >
-          {purchaseLoading ? (
-            <ActivityIndicator color={theme.textOnPrimary} size="small" />
-          ) : (
-            <AppText variant="button" tone="onPrimary" style={styles.subscribeBtnText}>
-              {priceText ? `${priceText} / ay — Abone ol` : 'Abone ol'}
-            </AppText>
-          )}
-        </TouchableOpacity>
+        />
 
-        <TouchableOpacity
-          style={[
-            styles.restoreBtn,
-            {
-              borderColor: theme.border,
-              borderRadius: theme.radius.sm + 2,
-              backgroundColor: theme.surface,
-              opacity: actionsDisabled ? 0.55 : 1,
-              minHeight: 48,
-              paddingHorizontal: theme.spacing.lg,
-            },
-          ]}
+        <AppText variant="caption" tone="tertiary" style={styles.ctaHint}>
+          İstediğin zaman Google Play’den iptal edebilirsin.
+        </AppText>
+
+        <AppButton
+          label="Satın alımları geri yükle"
           onPress={handleRestore}
+          variant="outline"
+          loading={restoreLoading}
           disabled={actionsDisabled}
-          activeOpacity={0.8}
-          accessibilityRole="button"
           accessibilityLabel="Satın alımları geri yükle"
-          accessibilityState={{ disabled: actionsDisabled }}
-        >
-          {restoreLoading ? (
-            <ActivityIndicator color={theme.textSecondary} size="small" />
-          ) : (
-            <AppText variant="bodyMedium" tone="secondary" style={styles.restoreBtnText}>
-              Satın alımları geri yükle
-            </AppText>
-          )}
-        </TouchableOpacity>
+        />
       </View>
 
       <TouchableOpacity
@@ -195,7 +121,7 @@ export default function PaywallScreen({ navigation, route }) {
         disabled={actionsDisabled}
         hitSlop={12}
       >
-        <AppText variant="subbody" tone="tertiary" style={styles.closeText}>
+        <AppText variant="caption" tone="tertiary" style={styles.closeText}>
           Şimdilik geç
         </AppText>
       </TouchableOpacity>
@@ -204,46 +130,11 @@ export default function PaywallScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  heroCard: {
-    alignItems: 'center',
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    marginBottom: 8,
-  },
-  priceAmount: {
-    fontWeight: '800',
-  },
-  priceSuffix: {
-    fontWeight: '500',
-  },
-  trustLine: {
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 4,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  featureIcon: {
-    marginTop: 2,
-    marginRight: 4,
-  },
-  featureText: {
-    flex: 1,
-    lineHeight: 22,
-  },
   actions: {},
+  ctaHint: {
+    textAlign: 'center',
+    marginTop: -6,
+  },
   subscribeBtn: {
     paddingVertical: 14,
     alignItems: 'center',
@@ -267,5 +158,6 @@ const styles = StyleSheet.create({
   },
   closeText: {
     fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

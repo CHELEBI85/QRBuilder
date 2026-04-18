@@ -8,11 +8,15 @@ const THEME_KEY = '@qrbuilder_theme';
 
 export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(true);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(THEME_KEY).then((val) => {
-      if (val !== null) setIsDark(val === 'dark');
-    });
+    AsyncStorage.getItem(THEME_KEY)
+      .then((val) => {
+        if (val !== null) setIsDark(val === 'dark');
+      })
+      .catch(() => {})
+      .finally(() => setReady(true));
   }, []);
 
   const toggleTheme = async () => {
@@ -22,6 +26,8 @@ export function ThemeProvider({ children }) {
   };
 
   const theme = isDark ? darkTheme : lightTheme;
+
+  if (!ready) return null;
 
   return (
     <ThemeContext.Provider value={{ theme, isDark, toggleTheme }}>

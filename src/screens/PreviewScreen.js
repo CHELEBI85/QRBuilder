@@ -5,24 +5,24 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Modal,
-  TextInput,
   ActivityIndicator,
   Platform,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import QRCodeDisplay from '../components/QRCodeDisplay';
 import ColorSwatchRow from '../components/ColorSwatchRow';
+import ColorPickerModal from '../components/ColorPickerModal';
 import QRIcon from '../components/QRIcon';
 import Toast from '../components/Toast';
 import ScreenContainer from '../components/ScreenContainer';
 import AppText from '../components/AppText';
 import AppCard from '../components/AppCard';
+import { AppButton, SectionCard } from '../components/ui';
 import { saveQRToHistory } from '../utils/storage';
 import { getPreferences } from '../utils/preferences';
 import {
@@ -44,7 +44,7 @@ async function writeTempQR(base64data, typeId = 'qr') {
   const payload = stripDataUrlToBase64Payload(base64data);
   const path = `${FileSystem.cacheDirectory}qr_${typeId}_${Date.now()}.png`;
   await FileSystem.writeAsStringAsync(path, payload, {
-    encoding: FileSystem.EncodingType.Base64,
+    encoding: 'base64',
   });
   return path;
 }
@@ -59,6 +59,13 @@ export default function PreviewScreen({ route, navigation }) {
   const { qrType, formData, qrValue } = route.params;
   const { theme } = useTheme();
   const svgRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const setSvgRef = useCallback((ref) => {
     svgRef.current = ref;
@@ -79,27 +86,37 @@ export default function PreviewScreen({ route, navigation }) {
   }, []);
 
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
-  const [customColorModal, setCustomColorModal] = useState({ visible: false, target: null });
-  const [customColorInput, setCustomColorInput] = useState('');
+  const [colorPicker, setColorPicker] = useState({ visible: false, target: null });
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
   };
 
-  const openCustomColor = (target) => {
-    setCustomColorInput(target === 'fg' ? fgColor : bgColor);
-    setCustomColorModal({ visible: true, target });
+  const openColorPicker = (target) => {
+    setColorPicker({ visible: true, target });
   };
 
-  const applyCustomColor = () => {
-    const hex = customColorInput.trim();
-    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(hex)) {
-      if (customColorModal.target === 'fg') setFgColor(hex);
-      else setBgColor(hex);
-      setCustomColorModal({ visible: false, target: null });
-    } else {
-      Alert.alert('Geçersiz Renk', 'Lütfen geçerli bir hex renk kodu girin (örn. #FF6B6B)');
+  const handleColorPicked = (hex) => {
+    if (colorPicker.target === 'fg') setFgColor(hex);
+    else setBgColor(hex);
+    setColorPicker({ visible: false, target: null });
+  };
+
+  const normalizePickedImageUri = async (uri) => {
+    if (!uri || typeof uri !== 'string') return null;
+    // Android'de picker çoğu zaman content:// döndürür; SVG Image bazı cihazlarda bunu render edemez.
+    if (Platform.OS === 'android' && uri.startsWith('content://')) {
+      try {
+        const target = `${FileSystem.cacheDirectory}logo_${Date.now()}.jpg`;
+        await FileSystem.copyAsync({ from: uri, to: target });
+        return target;
+      } catch (e) {
+        if (__DEV__) console.warn('[pickLogo] copy content:// failed', e);
+        // En azından orijinal URI ile dene
+        return uri;
+      }
     }
+    return uri;
   };
 
   const pickLogo = async () => {
@@ -114,10 +131,17 @@ export default function PreviewScreen({ route, navigation }) {
     if (Platform.OS === 'android') {
       // Android 13+ sistem foto seçici çoğu zaman izin diyaloğu olmadan çalışır; allowsEditing kırılgandır.
       pickerOptions.allowsEditing = false;
+      // Android <13'te bazı cihazlarda izin yine de gerekli olabilir; önce kontrol et.
+      const existing = await ImagePicker.getMediaLibraryPermissionsAsync();
+      if (existing.status !== 'granted' && existing.canAskAgain) {
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
       if (result.canceled) return;
       if (result.assets?.[0]?.uri) {
-        setLogo(result.assets[0].uri);
+        const normalized = await normalizePickedImageUri(result.assets[0].uri);
+        if (normalized) setLogo(normalized);
         return;
       }
       Alert.alert('Logo seçilemedi', 'Görsel seçilemedi. Tekrar deneyin.');
@@ -131,7 +155,8 @@ export default function PreviewScreen({ route, navigation }) {
     }
     const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
     if (!result.canceled && result.assets?.[0]) {
-      setLogo(result.assets[0].uri);
+      const normalized = await normalizePickedImageUri(result.assets[0].uri);
+      if (normalized) setLogo(normalized);
     }
   };
 
@@ -150,23 +175,31 @@ export default function PreviewScreen({ route, navigation }) {
       return;
     }
     setLoading('gallery');
-    svgRef.current.toDataURL(async (data) => {
+    const refSnapshot = svgRef.current;
+    refSnapshot.toDataURL(async (data) => {
       try {
         await savePngDataUrlToGallery(data, qrType.id);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast('QR kod galeriye kaydedildi.', 'success');
+        if (mountedRef.current) showToast('QR kod galeriye kaydedildi.', 'success');
       } catch (e) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        if (__DEV__) console.warn('[saveToGallery]', e);
-        const detail = e?.message || e?.code || '';
-        const msg =
-          e?.message === 'EMPTY_IMAGE_DATA'
-            ? 'QR görüntüsü oluşturulamadı.'
-            : `Galeriye kayıt başarısız. İzinleri kontrol edin.${detail ? `\n(${String(detail)})` : ''}`;
+        console.warn('[saveToGallery]', e);
+        if (!mountedRef.current) return;
+        const rawMsg = e?.message || '';
+        let msg;
+        if (rawMsg === 'EMPTY_IMAGE_DATA' || rawMsg === 'FILE_WRITE_FAILED') {
+          msg = 'QR görüntüsü oluşturulamadı. Lütfen tekrar deneyin.';
+        } else if (rawMsg.startsWith('SAVE_FAILED:')) {
+          const detail = rawMsg.replace('SAVE_FAILED:', '').trim();
+          msg = `Galeriye kayıt başarısız.\n\nHata: ${detail || 'Bilinmiyor'}\n\nCihaz ayarlarından uygulama izinlerini kontrol edin.`;
+        } else {
+          const detail = rawMsg || e?.code || String(e) || '';
+          msg = `Galeriye kayıt başarısız.${detail ? `\n\nHata: ${detail}` : ''}\n\nCihaz ayarlarından uygulama izinlerini kontrol edin.`;
+        }
         Alert.alert('Kaydedilemedi', msg);
         showToast('Galeriye kaydedilemedi.', 'error');
       } finally {
-        setLoading(null);
+        if (mountedRef.current) setLoading(null);
       }
     });
   };
@@ -175,7 +208,8 @@ export default function PreviewScreen({ route, navigation }) {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!svgRef.current) return;
     setLoading('share');
-    svgRef.current.toDataURL(async (data) => {
+    const refSnapshot = svgRef.current;
+    refSnapshot.toDataURL(async (data) => {
       let path;
       try {
         path = await writeTempQR(data, qrType.id);
@@ -183,13 +217,13 @@ export default function PreviewScreen({ route, navigation }) {
         if (isAvailable) {
           await Sharing.shareAsync(path, { mimeType: 'image/png', dialogTitle: 'QR Kodu Paylaş' });
         } else {
-          showToast('Bu cihazda paylaşım desteklenmiyor.', 'error');
+          if (mountedRef.current) showToast('Bu cihazda paylaşım desteklenmiyor.', 'error');
         }
       } catch (e) {
-        showToast('Paylaşım sırasında bir hata oluştu.', 'error');
+        if (mountedRef.current) showToast('Paylaşım sırasında bir hata oluştu.', 'error');
       } finally {
         if (path) await deleteTempFile(path);
-        setLoading(null);
+        if (mountedRef.current) setLoading(null);
       }
     });
   };
@@ -198,6 +232,18 @@ export default function PreviewScreen({ route, navigation }) {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading('history');
     try {
+      // Logo varsa cache'den documentDirectory'ye kopyala — cache temizlenince kaybolmasın
+      let persistedLogo = null;
+      if (logo) {
+        try {
+          const ext = logo.split('.').pop()?.split('?')[0] || 'jpg';
+          const dest = `${FileSystem.documentDirectory}qrlogo_${Date.now()}.${ext}`;
+          await FileSystem.copyAsync({ from: logo, to: dest });
+          persistedLogo = dest;
+        } catch (_) {
+          persistedLogo = logo; // kopyalanamadıysa orijinal URI'yi dene
+        }
+      }
       await saveQRToHistory({
         typeId: qrType.id,
         typeLabel: qrType.label,
@@ -205,6 +251,7 @@ export default function PreviewScreen({ route, navigation }) {
         formData,
         fgColor,
         bgColor,
+        logo: persistedLogo,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Geçmişe kaydedildi.', 'success');
@@ -233,7 +280,7 @@ export default function PreviewScreen({ route, navigation }) {
         }}
       >
         {/* Önizleme */}
-        <AppCard
+        <SectionCard
           padding="lg"
           style={{
             marginBottom: theme.spacing.lg,
@@ -259,10 +306,10 @@ export default function PreviewScreen({ route, navigation }) {
               {qrType.label}
             </AppText>
           </View>
-        </AppCard>
+        </SectionCard>
 
         {/* Özelleştirme */}
-        <AppCard padding="lg" style={{ marginBottom: theme.spacing.lg }}>
+        <SectionCard padding="lg" style={{ marginBottom: theme.spacing.lg }}>
           <AppText variant="sectionLabel" tone="secondary" style={{ marginBottom: theme.spacing.md }}>
             ÖZELLEŞTİRME
           </AppText>
@@ -271,13 +318,13 @@ export default function PreviewScreen({ route, navigation }) {
             label="QR Rengi"
             selected={fgColor}
             onSelect={setFgColor}
-            onCustom={() => openCustomColor('fg')}
+            onCustom={() => openColorPicker('fg')}
           />
           <ColorSwatchRow
             label="Arka Plan Rengi"
             selected={bgColor}
             onSelect={setBgColor}
-            onCustom={() => openCustomColor('bg')}
+            onCustom={() => openColorPicker('bg')}
           />
 
           <View style={{ marginBottom: theme.spacing.md }}>
@@ -355,7 +402,7 @@ export default function PreviewScreen({ route, navigation }) {
               </TouchableOpacity>
             ) : null}
           </TouchableOpacity>
-        </AppCard>
+        </SectionCard>
 
         {/* Dışa aktar */}
         <View style={{ marginBottom: theme.spacing.lg }}>
@@ -363,31 +410,23 @@ export default function PreviewScreen({ route, navigation }) {
             KAYDET VE PAYLAŞ
           </AppText>
           <View style={[styles.actions, { gap: theme.spacing.md }]}>
-            <ActionButton
+            <AppButton
               label="Galeriye kaydet"
-              icon="📥"
-              color={theme.primary}
-              textColor={theme.textOnPrimary}
+              variant="primary"
               loading={loading === 'gallery'}
               disabled={isLoading}
               onPress={saveToGallery}
             />
-            <ActionButton
+            <AppButton
               label="Paylaş"
-              icon="📤"
-              color={theme.surface}
-              textColor={theme.primary}
-              borderColor={theme.primary}
+              variant="outline"
               loading={loading === 'share'}
               disabled={isLoading}
               onPress={shareQR}
             />
-            <ActionButton
+            <AppButton
               label="Geçmişe kaydet"
-              icon="🗂️"
-              color={theme.surface}
-              textColor={theme.textPrimary}
-              borderColor={theme.border}
+              variant="secondary"
               loading={loading === 'history'}
               disabled={isLoading}
               onPress={saveToHistory}
@@ -409,87 +448,13 @@ export default function PreviewScreen({ route, navigation }) {
         onHide={() => setToast((t) => ({ ...t, visible: false }))}
       />
 
-      <Modal
-        visible={customColorModal.visible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCustomColorModal({ visible: false, target: null })}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: theme.card, borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl }]}>
-            <AppText variant="title3" tone="primary" style={{ marginBottom: theme.spacing.sm }}>
-              Özel renk
-            </AppText>
-            <AppText variant="caption" tone="secondary" style={{ marginBottom: theme.spacing.lg }}>
-              Hex renk kodu girin (örn. #FF6B6B)
-            </AppText>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                  color: theme.textPrimary,
-                  borderRadius: theme.radius.sm,
-                },
-              ]}
-              value={customColorInput}
-              onChangeText={setCustomColorInput}
-              placeholder="#000000"
-              placeholderTextColor={theme.textTertiary}
-              autoCapitalize="characters"
-              maxLength={7}
-            />
-            <View style={[styles.colorPreview, { backgroundColor: customColorInput, borderRadius: theme.radius.sm }]} />
-            <View style={[styles.modalButtons, { gap: theme.spacing.md }]}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: theme.surface, borderRadius: theme.radius.sm }]}
-                onPress={() => setCustomColorModal({ visible: false, target: null })}
-              >
-                <AppText variant="bodyMedium" tone="primary">İptal</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: theme.primary, borderRadius: theme.radius.sm }]}
-                onPress={applyCustomColor}
-              >
-                <AppText variant="button" tone="onPrimary">Uygula</AppText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ColorPickerModal
+        visible={colorPicker.visible}
+        initialColor={colorPicker.target === 'fg' ? fgColor : bgColor}
+        onApply={handleColorPicked}
+        onClose={() => setColorPicker({ visible: false, target: null })}
+      />
     </>
-  );
-}
-
-function ActionButton({ label, icon, color, textColor, borderColor, loading, disabled, onPress }) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.actionBtn,
-        {
-          backgroundColor: color,
-          borderWidth: borderColor ? 1.5 : 0,
-          borderColor: borderColor || 'transparent',
-          borderRadius: 14,
-          opacity: disabled ? 0.55 : 1,
-        },
-      ]}
-      onPress={onPress}
-      activeOpacity={0.85}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-    >
-      {loading ? (
-        <ActivityIndicator color={textColor} size="small" />
-      ) : (
-        <Text style={[styles.actionBtnText, { color: textColor }]}>
-          {icon}  {label}
-        </Text>
-      )}
-    </TouchableOpacity>
   );
 }
 
@@ -512,22 +477,9 @@ const styles = StyleSheet.create({
   logoBtnText: { flex: 1, fontSize: 14, fontWeight: '600' },
   removeLogoBtn: { paddingHorizontal: 8 },
   actions: {},
-  actionBtn: {
-    paddingVertical: 15,
-    alignItems: 'center',
-    minHeight: 52,
-    justifyContent: 'center',
-  },
-  actionBtnText: { fontSize: 15, fontWeight: '700' },
   themesRow: { flexDirection: 'row', flexWrap: 'wrap' },
   themeChip: { paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1 },
   themeChipText: { fontSize: 12, fontWeight: '700' },
   newQRBtn: { alignItems: 'center', paddingVertical: 20 },
   newQRText: { fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { padding: 24, paddingBottom: 40 },
-  modalInput: { borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginBottom: 12 },
-  colorPreview: { height: 40, marginBottom: 16 },
-  modalButtons: { flexDirection: 'row' },
-  modalBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
 });

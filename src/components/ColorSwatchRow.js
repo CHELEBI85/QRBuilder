@@ -17,18 +17,18 @@ export default function ColorSwatchRow({ label, selected, onSelect, onCustom }) 
             style={[
               styles.swatch,
               { backgroundColor: color, borderColor: theme.border },
-              selected === color && { borderWidth: 3, borderColor: theme.accent },
+              selected === color && { borderWidth: 3, borderColor: theme.primary },
             ]}
             onPress={() => onSelect(color)}
             activeOpacity={0.8}
           />
         ))}
         <TouchableOpacity
-          style={[styles.customBtn, { borderColor: theme.accent }]}
+          style={[styles.customBtn, { borderColor: theme.primary }]}
           onPress={onCustom}
           activeOpacity={0.8}
         >
-          <Text style={{ color: theme.accent, fontSize: 18 }}>+</Text>
+          <Text style={{ color: theme.primary, fontSize: 18 }}>+</Text>
         </TouchableOpacity>
         <View
           style={[styles.currentSwatch, { backgroundColor: selected, borderColor: theme.border }]}

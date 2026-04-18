@@ -1,9 +1,9 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet, View } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import QRIcon from './QRIcon';
 import AppText from './AppText';
+import PremiumChip from './ui/PremiumChip';
 
 export default function QRTypeCard({ item, onPress, disabled = false }) {
   const { theme } = useTheme();
@@ -18,7 +18,7 @@ export default function QRTypeCard({ item, onPress, disabled = false }) {
           borderColor: isPremium ? theme.primarySoft : theme.border,
           borderRadius: theme.radius.md,
           margin: theme.spacing.sm,
-          paddingVertical: theme.spacing.lg,
+          paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.sm,
           opacity: disabled ? 0.55 : 1,
         },
@@ -40,22 +40,8 @@ export default function QRTypeCard({ item, onPress, disabled = false }) {
           },
         ]}
       >
-        <QRIcon icon={item.icon} size={28} />
-        {isPremium && (
-          <View
-            style={[
-              styles.badge,
-              {
-                backgroundColor: theme.primary,
-                borderRadius: theme.radius.pill,
-                borderWidth: 2,
-                borderColor: theme.card,
-              },
-            ]}
-          >
-            <MaterialIcons name="workspace-premium" size={11} color={theme.textOnPrimary} />
-          </View>
-        )}
+        <QRIcon icon={item.icon} size={26} />
+        {isPremium ? <PremiumChip kind="locked" style={styles.premiumChip} /> : null}
       </View>
       <AppText variant="subbody" tone="primary" style={styles.label} numberOfLines={1}>
         {item.label}
@@ -75,21 +61,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   iconWrapper: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
-  badge: {
+  premiumChip: {
     position: 'absolute',
-    bottom: -6,
-    right: -6,
-    minWidth: 22,
-    height: 22,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
+    bottom: -8,
+    right: -10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
   label: {
     fontWeight: '700',

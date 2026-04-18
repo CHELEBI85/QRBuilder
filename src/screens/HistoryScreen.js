@@ -6,27 +6,27 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  TextInput,
   Modal,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../context/ThemeContext';
 import { getHistory, deleteQRFromHistory, clearHistory } from '../utils/storage';
 import { ensureMediaLibrarySavePermission, savePngDataUrlToGallery } from '../utils/qrGalleryExport';
 import { QR_TYPES } from '../constants/qrTypes';
-import QRIcon from '../components/QRIcon';
 import QRCode from 'react-native-qrcode-svg';
 import AppCard from '../components/AppCard';
-import SectionHeader from '../components/SectionHeader';
-import EmptyState from '../components/EmptyState';
+import { HistoryCard, ScreenHeader, SearchInput, EmptyState, PremiumChip } from '../components/ui';
 import LoadingState from '../components/LoadingState';
 import AppText from '../components/AppText';
+import ScreenContainer from '../components/ScreenContainer';
+import { useNavigation } from '@react-navigation/native';
 
 export default function HistoryScreen() {
   const { theme } = useTheme();
+  const navigation = useNavigation();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -39,11 +39,16 @@ export default function HistoryScreen() {
   useFocusEffect(
     useCallback(() => {
       if (firstHistoryLoad.current) setLoading(true);
-      getHistory().then((data) => {
-        setHistory(data);
-        setLoading(false);
-        firstHistoryLoad.current = false;
-      });
+      getHistory()
+        .then((data) => {
+          setHistory(data);
+          setLoading(false);
+          firstHistoryLoad.current = false;
+        })
+        .catch(() => {
+          setLoading(false);
+          firstHistoryLoad.current = false;
+        });
     }, [])
   );
 
@@ -71,6 +76,11 @@ export default function HistoryScreen() {
         text: 'Sil',
         style: 'destructive',
         onPress: async () => {
+          // Logoyu da sil (documentDirectory'de saklıysa)
+          const item = history.find((h) => h.id === id);
+          if (item?.logo?.includes('qrlogo_')) {
+            FileSystem.deleteAsync(item.logo, { idempotent: true }).catch(() => {});
+          }
           const updated = await deleteQRFromHistory(id);
           setHistory(updated);
         },
@@ -86,6 +96,12 @@ export default function HistoryScreen() {
         text: 'Tümünü Sil',
         style: 'destructive',
         onPress: async () => {
+          // Tüm logo dosyalarını temizle
+          history.forEach((item) => {
+            if (item?.logo?.includes('qrlogo_')) {
+              FileSystem.deleteAsync(item.logo, { idempotent: true }).catch(() => {});
+            }
+          });
           await clearHistory();
           setHistory([]);
           setActiveType(null);
@@ -106,6 +122,16 @@ export default function HistoryScreen() {
   const maskWifiPassword = (typeId, qrValue) => {
     if (typeId !== 'wifi' || !qrValue) return qrValue;
     return qrValue.replace(/(;P:)([^;]+)(;)/, '$1••••••••$3');
+  };
+
+  const goToCreate = () => {
+    navigation.navigate('CreateTab');
+  };
+
+  const handleRecreate = (item) => {
+    const qrType = QR_TYPES.find((t) => t.id === item.typeId);
+    if (!qrType) return;
+    navigation.navigate('CreateTab', { screen: 'Create', params: { qrType } });
   };
 
   const savePreviewToGallery = async () => {
@@ -129,13 +155,18 @@ export default function HistoryScreen() {
         Alert.alert('Kaydedildi', 'QR kod galerinize kaydedildi.');
       } catch (e) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        if (__DEV__) console.warn('[History saveToGallery]', e);
-        Alert.alert(
-          'Kaydedilemedi',
-          e?.message === 'EMPTY_IMAGE_DATA'
-            ? 'QR görüntüsü oluşturulamadı.'
-            : 'Galeriye kayıt başarısız. İzinleri ve depolama alanını kontrol edin.'
-        );
+        console.warn('[History saveToGallery]', e);
+        const rawMsg = e?.message || '';
+        let errText;
+        if (rawMsg === 'EMPTY_IMAGE_DATA' || rawMsg === 'FILE_WRITE_FAILED') {
+          errText = 'QR görüntüsü oluşturulamadı. Lütfen tekrar deneyin.';
+        } else if (rawMsg.startsWith('SAVE_FAILED:')) {
+          const detail = rawMsg.replace('SAVE_FAILED:', '').trim();
+          errText = `Galeriye kayıt başarısız.\n\nHata: ${detail || 'Bilinmiyor'}\n\nCihaz ayarlarından uygulama izinlerini kontrol edin.`;
+        } else {
+          errText = `Galeriye kayıt başarısız.${rawMsg ? `\n\nHata: ${rawMsg}` : ''}\n\nCihaz ayarlarından uygulama izinlerini kontrol edin.`;
+        }
+        Alert.alert('Kaydedilemedi', errText);
       } finally {
         setSavingGallery(false);
       }
@@ -143,61 +174,21 @@ export default function HistoryScreen() {
   };
 
   const renderItem = ({ item }) => {
-    const qrTypeDef = QR_TYPES.find((t) => t.id === item.typeId);
     return (
-      <AppCard
-        style={[
-          styles.listCard,
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.md,
-            marginBottom: theme.spacing.md,
-            marginHorizontal: theme.spacing.lg,
-          },
-        ]}
-        padding="md"
-      >
-        <TouchableOpacity
-          onPress={() => {
+      <View style={{ marginBottom: theme.spacing.md }}>
+        <HistoryCard
+          item={{
+            ...item,
+            qrValue: maskWifiPassword(item.typeId, item.qrValue),
+          }}
+          onPressPreview={() => {
             Haptics.selectionAsync();
             setPreviewItem(item);
           }}
-          style={[styles.qrThumb, { backgroundColor: theme.qrLight }]}
-          activeOpacity={0.7}
-        >
-          <QRCode
-            value={item.qrValue || 'QR'}
-            size={64}
-            color={item.fgColor || '#000000'}
-            backgroundColor={item.bgColor || '#FFFFFF'}
-          />
-          <Text style={styles.thumbHint}>👆</Text>
-        </TouchableOpacity>
-
-        <View style={styles.info}>
-          <View style={[styles.typeLabelRow, { gap: 5 }]}>
-            {qrTypeDef && <QRIcon icon={qrTypeDef.icon} size={14} />}
-            <AppText variant="caption" tone="primary" style={[styles.typeLabel, { color: theme.primary }]}>
-              {item.typeLabel}
-            </AppText>
-          </View>
-          <AppText variant="caption" tone="primary" style={styles.qrValue} numberOfLines={2}>
-            {maskWifiPassword(item.typeId, item.qrValue)}
-          </AppText>
-          <AppText variant="caption" tone="tertiary" style={styles.date}>
-            {formatDate(item.createdAt)}
-          </AppText>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.deleteBtn, { backgroundColor: theme.surface, borderRadius: theme.radius.sm }]}
-          onPress={() => handleDelete(item.id)}
-          activeOpacity={0.8}
-        >
-          <Text style={{ color: theme.error, fontSize: 18 }}>🗑️</Text>
-        </TouchableOpacity>
-      </AppCard>
+          onDelete={() => handleDelete(item.id)}
+          onRecreate={() => handleRecreate(item)}
+        />
+      </View>
     );
   };
 
@@ -210,13 +201,21 @@ export default function HistoryScreen() {
   } else if (history.length === 0) {
     mainContent = (
       <EmptyState
-        emoji="📋"
+        icon="history"
         title="Henüz kayıtlı QR kodu yok"
-        hint='QR oluşturup "Geçmişe Kaydet" butonuna basın'
+        description="İlk QR’ını oluştur ve galeriye kaydetmeden önce burada sakla."
+        actionLabel="İlk QR'ını oluştur"
+        onAction={goToCreate}
       />
     );
   } else if (filtered.length === 0) {
-    mainContent = <EmptyState emoji="🔍" title="Sonuç bulunamadı" />;
+    mainContent = (
+      <EmptyState
+        icon="search"
+        title="Sonuç bulunamadı"
+        description="Arama terimini veya filtreleri değiştirin."
+      />
+    );
   } else {
     mainContent = (
       <FlatList
@@ -226,55 +225,36 @@ export default function HistoryScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.list, { paddingBottom: theme.spacing.xxl }]}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={15}
       />
     );
   }
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
-      <SectionHeader
+    <ScreenContainer scroll={false} edges={['top', 'left', 'right']} contentContainerStyle={styles.screenPadFix}>
+      <ScreenHeader
         title="Geçmiş"
         subtitle={headerSubtitle}
         right={
           !loading && history.length > 0 ? (
-            <TouchableOpacity onPress={handleClearAll} activeOpacity={0.8}>
-              <AppText variant="subbody" tone="error" style={styles.clearAll}>
-                Tümünü Sil
-              </AppText>
+            <TouchableOpacity onPress={handleClearAll} activeOpacity={0.85}>
+              <PremiumChip kind="locked" label="Temizle" style={styles.clearChip} />
             </TouchableOpacity>
           ) : null
         }
       />
 
       {!loading && history.length > 0 && (
-        <AppCard
-          padding="md"
-          style={[
-            styles.searchRow,
-            {
-              marginHorizontal: theme.spacing.lg,
-              marginBottom: theme.spacing.sm + 2,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: theme.spacing.sm,
-            },
-          ]}
-        >
-          <Text style={{ fontSize: 16 }}>🔍</Text>
-          <TextInput
-            style={[styles.searchInput, { color: theme.textPrimary, flex: 1 }]}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="QR içeriği veya tür ara..."
-            placeholderTextColor={theme.textTertiary}
-            returnKeyType="search"
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
-              <Text style={{ color: theme.textTertiary, fontSize: 16 }}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </AppCard>
+        <SearchInput
+          value={search}
+          onChangeText={setSearch}
+          onClear={() => setSearch('')}
+          placeholder="QR içeriği veya tür ara..."
+          style={{ marginBottom: theme.spacing.sm }}
+        />
       )}
 
       {!loading && usedTypes.length > 1 && (
@@ -283,7 +263,7 @@ export default function HistoryScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={[
             styles.filterRow,
-            { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm + 2, gap: theme.spacing.sm },
+            { paddingHorizontal: 0, paddingBottom: theme.spacing.sm + 2, gap: theme.spacing.sm },
           ]}
         >
           <TouchableOpacity
@@ -345,12 +325,13 @@ export default function HistoryScreen() {
                   size={240}
                   color={previewItem.fgColor || '#000000'}
                   backgroundColor={previewItem.bgColor || '#FFFFFF'}
+                  {...(previewItem.logo ? { logo: { uri: previewItem.logo }, logoSize: 60, logoBackgroundColor: 'transparent' } : {})}
                 />
               </View>
-              <Text style={[styles.previewLabel, { color: theme.text }]} numberOfLines={3}>
+              <Text style={[styles.previewLabel, { color: theme.textPrimary }]} numberOfLines={3}>
                 {maskWifiPassword(previewItem.typeId, previewItem.qrValue)}
               </Text>
-              <Text style={[styles.previewDate, { color: theme.textMuted }]}>{formatDate(previewItem.createdAt)}</Text>
+              <Text style={[styles.previewDate, { color: theme.textTertiary }]}>{formatDate(previewItem.createdAt)}</Text>
               <View style={styles.previewActions}>
                 <TouchableOpacity
                   style={[
@@ -388,7 +369,7 @@ export default function HistoryScreen() {
           )}
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -396,8 +377,12 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   flexMain: { flex: 1 },
   clearAll: { fontWeight: '600' },
-  searchRow: {},
-  searchInput: { fontSize: 14 },
+  screenPadFix: {
+    paddingTop: 0,
+  },
+  clearChip: {
+    backgroundColor: 'transparent',
+  },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',

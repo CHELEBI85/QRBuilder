@@ -51,6 +51,11 @@ export function SubscriptionProvider({ children }) {
         setIsPremium(true);
         refresh();
       });
+      if (!mounted) {
+        sub?.remove?.();
+        sub = null;
+        return;
+      }
       errSub = RNIap.purchaseErrorListener((err) => {
         if (err?.code !== 'E_USER_CANCELLED') {
           console.warn('[Subscription] purchase error:', err);

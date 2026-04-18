@@ -1,24 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import InputField from '../components/InputField';
 import QRIcon from '../components/QRIcon';
 import ScreenContainer from '../components/ScreenContainer';
-import SectionHeader from '../components/SectionHeader';
 import AppText from '../components/AppText';
-import AppCard from '../components/AppCard';
+import { AppButton, InlineUpsellCard, ScreenHeader, SectionCard } from '../components/ui';
 import { formatQRData } from '../utils/qrFormatter';
 import { validateQRForm } from '../utils/validators';
 
 export default function CreateScreen({ route, navigation }) {
-  const { qrType } = route.params;
+  const qrType = route.params?.qrType;
   const { theme } = useTheme();
+  const { isPremium } = useSubscription();
+
+  if (!qrType) {
+    navigation.goBack();
+    return null;
+  }
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
 
@@ -141,13 +146,9 @@ export default function CreateScreen({ route, navigation }) {
           paddingBottom: theme.spacing.huge,
         }}
       >
-        <SectionHeader
-          title={qrType.label}
-          subtitle={qrType.description}
-          style={{ paddingTop: theme.spacing.sm }}
-        />
+        <ScreenHeader title={qrType.label} subtitle={qrType.description} />
 
-        <AppCard padding="lg" style={[styles.heroIconCard, { marginBottom: theme.spacing.lg }]}>
+        <SectionCard padding="lg" style={[styles.heroIconCard, { marginBottom: theme.spacing.lg }]}>
           <View
             style={[
               styles.iconCircle,
@@ -159,34 +160,26 @@ export default function CreateScreen({ route, navigation }) {
           >
             <QRIcon icon={qrType.icon} size={36} />
           </View>
-        </AppCard>
+        </SectionCard>
 
-        <AppCard padding="lg" style={{ marginBottom: theme.spacing.lg }}>
+        {!isPremium ? (
+          <View style={{ marginBottom: theme.spacing.lg }}>
+            <InlineUpsellCard
+              title="Daha fazla QR türü mü istiyorsun?"
+              description="Wi‑Fi, kişi kartı, konum ve sosyal medya QR’ları Premium ile açılır."
+              onPress={() => navigation.navigate('Paywall')}
+            />
+          </View>
+        ) : null}
+
+        <SectionCard padding="lg" style={{ marginBottom: theme.spacing.lg }}>
           <AppText variant="sectionLabel" tone="secondary" style={{ marginBottom: theme.spacing.md }}>
             BİLGİLER
           </AppText>
           {qrType.fields.map((field, index) => renderField(field, index))}
-        </AppCard>
+        </SectionCard>
 
-        <TouchableOpacity
-          style={[
-            styles.generateBtn,
-            {
-              backgroundColor: theme.primary,
-              borderRadius: theme.radius.sm + 2,
-              paddingVertical: theme.spacing.md,
-              marginHorizontal: theme.spacing.xs,
-            },
-          ]}
-          onPress={handleGenerate}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="QR kodu oluştur ve önizlemeye git"
-        >
-          <AppText variant="button" tone="onPrimary" style={styles.generateBtnText}>
-            QR kodu oluştur →
-          </AppText>
-        </TouchableOpacity>
+        <AppButton label="QR kodu oluştur" onPress={handleGenerate} variant="primary" size="lg" />
       </ScreenContainer>
     </KeyboardAvoidingView>
   );
@@ -229,12 +222,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginLeft: 4,
   },
-  generateBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 52,
-  },
-  generateBtnText: {
-    textAlign: 'center',
-  },
+  generateBtn: {},
+  generateBtnText: {},
 });

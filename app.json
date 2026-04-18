@@ -4,11 +4,11 @@
     "slug": "QRBuilder",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/siyahlogo.png",
     "userInterfaceStyle": "automatic",
 
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/siyahlogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#0F0F1A"
     },

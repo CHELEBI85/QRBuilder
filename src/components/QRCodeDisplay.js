@@ -13,7 +13,7 @@ export default function QRCodeDisplay({
   getRef,
 }) {
   const { theme } = useTheme();
-  const qrColor = color || theme.text;
+  const qrColor = color || theme.textPrimary;
   const qrBg = backgroundColor || theme.card;
 
   if (!value || value.trim() === '') {

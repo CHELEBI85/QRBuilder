@@ -23,7 +23,7 @@ function CreateStack() {
     <Stack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: theme.card },
-        headerTintColor: theme.text,
+        headerTintColor: theme.textPrimary,
         headerShadowVisible: false,
         headerTitleStyle: { fontWeight: '700' },
         contentStyle: { backgroundColor: theme.background },
@@ -62,6 +62,7 @@ export default function AppNavigator() {
 
   // Tab bar content height + device bottom inset (gesture bar / home indicator)
   const tabBarHeight = 56 + insets.bottom;
+  const tabBarBottomPad = insets.bottom > 0 ? insets.bottom : 8;
 
   return (
     <NavigationContainer>
@@ -75,11 +76,17 @@ export default function AppNavigator() {
             borderTopWidth: 1,
             height: tabBarHeight,
             paddingTop: 8,
-            paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+            paddingBottom: tabBarBottomPad,
           },
-          tabBarActiveTintColor: theme.accent,
-          tabBarInactiveTintColor: theme.textMuted,
-          tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+          tabBarItemStyle: {
+            paddingTop: 2,
+          },
+          tabBarIconStyle: {
+            marginTop: 2,
+          },
+          tabBarActiveTintColor: theme.primary,
+          tabBarInactiveTintColor: theme.textTertiary,
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginTop: 2 },
         }}
       >
         <Tab.Screen
@@ -110,6 +117,8 @@ export default function AppNavigator() {
             tabBarIcon: ({ color, size }) => (
               <MaterialIcons name="qr-code-scanner" size={size} color={color} />
             ),
+            // Scanner deneyimini daha odaklı yapmak için tab bar'ı gizle
+            tabBarStyle: { display: 'none' },
           }}
         />
         <Tab.Screen
