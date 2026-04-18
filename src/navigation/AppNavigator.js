@@ -1,6 +1,7 @@
 import React from 'react';
+import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBar } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ import HistoryScreen from '../screens/HistoryScreen';
 import ScannerScreen from '../screens/ScannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import PaywallScreen from '../screens/PaywallScreen';
+import TabScreenAdFooter from '../components/TabScreenAdFooter';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -56,6 +58,20 @@ function CreateStack() {
   );
 }
 
+function MainTabBar(props) {
+  const current = props.state.routes[props.state.index];
+  const routeName = current?.name;
+  if (routeName === 'ScannerTab') {
+    return null;
+  }
+  return (
+    <View>
+      <TabScreenAdFooter />
+      <BottomTabBar {...props} />
+    </View>
+  );
+}
+
 export default function AppNavigator() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -67,6 +83,7 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Tab.Navigator
+        tabBar={(tabBarProps) => <MainTabBar {...tabBarProps} />}
         screenOptions={{
           headerShown: false,
           tabBarHideOnKeyboard: true,
@@ -117,8 +134,6 @@ export default function AppNavigator() {
             tabBarIcon: ({ color, size }) => (
               <MaterialIcons name="qr-code-scanner" size={size} color={color} />
             ),
-            // Scanner deneyimini daha odaklı yapmak için tab bar'ı gizle
-            tabBarStyle: { display: 'none' },
           }}
         />
         <Tab.Screen
