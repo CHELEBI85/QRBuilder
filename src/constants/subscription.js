@@ -5,8 +5,6 @@
 export const SUBSCRIPTION_SKUS = {
   // Aylık abonelik (Play Console'daki Product ID ile eşleşmeli)
   MONTHLY: 'qrbuilder_premium_monthly',
-  // İsteğe bağlı: Yıllık abonelik
-  YEARLY: 'qrbuilder_premium_yearly',
 };
 
 export const PREMIUM_FEATURES = [

@@ -26,12 +26,22 @@
       "adaptiveIcon": {
         "backgroundColor": "#0F0F1A",
         "foregroundImage": "./assets/siyahlogo.png"
-      }
+      },
+      "permissions": [
+        "com.google.android.gms.permission.AD_ID"
+      ]
     },
     "web": {
       "favicon": "./assets/siyahlogo.png"
     },
     "plugins": [
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-1333956817002049~6368606029",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
       [
         "expo-media-library",
         {
@@ -51,23 +61,18 @@
         {
           "cameraPermission": "QR kodlarını okumak için kamera erişimi gerekiyor."
         }
-      ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-4681564110995913~5343124922",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
-        }
       ]
     ],
     "extra": {
       "eas": {
         "projectId": "3086e76c-4833-4bf6-b8d2-3b01e627396f"
       },
-      "admobBannerAndroid": "ca-app-pub-4681564110995913/5683916606",
-      "admobBannerIos": "",
-      "admobInterstitialAndroid": "ca-app-pub-4681564110995913/1611763470",
-      "admobInterstitialIos": ""
+      "admobBannerAndroid": "ca-app-pub-1333956817002049/7450587553",
+      "admobAdaptiveBannerAndroid": "ca-app-pub-1333956817002049/7450587553",
+      "admobInterstitialAndroid": "ca-app-pub-1333956817002049/1089418674",
+      "admobBannerIos": "ca-app-pub-3940256099942544/2934735716",
+      "admobAdaptiveBannerIos": "ca-app-pub-3940256099942544/2435281174",
+      "admobInterstitialIos": "ca-app-pub-3940256099942544/4411468910"
     }
   }
 }

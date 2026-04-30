@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
 /**
@@ -15,11 +15,15 @@ export default function ScreenContainer({
   ...scrollViewProps
 }) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const usesBottomEdge = edges.includes('bottom');
+  const customContentStyle = StyleSheet.flatten(contentContainerStyle) || {};
 
   const contentPad = {
-    paddingHorizontal: theme.spacing.xl,
-    paddingTop: theme.spacing.xl,
-    paddingBottom: theme.spacing.xxxl,
+    paddingHorizontal: customContentStyle.paddingHorizontal ?? theme.spacing.xl,
+    paddingTop: customContentStyle.paddingTop ?? theme.spacing.xl,
+    paddingBottom:
+      (customContentStyle.paddingBottom ?? theme.spacing.xxxl) + (usesBottomEdge ? 0 : insets.bottom),
   };
 
   return (
@@ -28,13 +32,13 @@ export default function ScreenContainer({
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[contentPad, contentContainerStyle]}
+          contentContainerStyle={[contentContainerStyle, contentPad]}
           {...scrollViewProps}
         >
           {children}
         </ScrollView>
       ) : (
-        <View style={[styles.flex, contentPad, contentContainerStyle]}>{children}</View>
+        <View style={[styles.flex, contentContainerStyle, contentPad]}>{children}</View>
       )}
     </SafeAreaView>
   );

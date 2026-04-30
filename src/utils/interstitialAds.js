@@ -1,37 +1,25 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resolveInterstitialUnitId, shouldUseAds } from '../constants/adMob';
+import { ensureMobileAdsInitialized } from './initMobileAds';
 
-const STORAGE_KEY = '@qrbuilder_qr_export_count_ads';
-/** Her kaç başarılı kayıtta (galeri veya geçmiş) bir geçiş reklamı denensin */
-export const INTERSTITIAL_EVERY_N_EXPORTS = 3;
+function logAdError(prefix, err) {
+  console.warn(prefix, {
+    code: err?.code,
+    domain: err?.domain,
+    message: err?.message,
+    responseInfo: err?.responseInfo,
+  });
+}
 
 /**
- * Galeriye veya geçmişe başarılı kayıt sonrası çağır (aynı önizleme oturumunda yalnızca bir kez).
- * Premium / Expo Go / web'de no-op.
+ * Her QR oluşturulduğunda (PreviewScreen mount) çağrılır.
+ * Premium kullanıcılarda ve Expo Go'da no-op.
  */
-export async function recordQrExportSuccessAndMaybeShowInterstitial({ isPremium }) {
+export async function showInterstitialOnQrCreated({ isPremium }) {
   if (!shouldUseAds() || isPremium) return;
 
-  let count = 0;
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    count = raw ? parseInt(raw, 10) || 0 : 0;
-  } catch (_) {
-    return;
-  }
-
-  count += 1;
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, String(count));
-  } catch (_) {
-    return;
-  }
-
-  if (count % INTERSTITIAL_EVERY_N_EXPORTS !== 0) return;
-
-  try {
+    await ensureMobileAdsInitialized();
     const mod = await import('react-native-google-mobile-ads');
-    await mod.default().initialize();
     const unitId = resolveInterstitialUnitId(mod.TestIds);
     if (!unitId) return;
 
@@ -44,9 +32,7 @@ export async function recordQrExportSuccessAndMaybeShowInterstitial({ isPremium 
     const cleanup = () => {
       while (unsubscribers.length) {
         const u = unsubscribers.pop();
-        try {
-          u();
-        } catch (_) {}
+        try { u(); } catch (_) {}
       }
     };
 
@@ -56,19 +42,19 @@ export async function recordQrExportSuccessAndMaybeShowInterstitial({ isPremium 
         try {
           interstitial.show();
         } catch (e) {
-          if (__DEV__) console.warn('[Ads] interstitial show:', e?.message);
+          console.warn('[Ads] interstitial show:', e?.message);
         }
       })
     );
     unsubscribers.push(
       interstitial.addAdEventListener(AdEventType.ERROR, (err) => {
         cleanup();
-        console.warn('[Ads] interstitial load failed:', err?.message);
+        logAdError('[Ads] interstitial load failed', err);
       })
     );
 
     interstitial.load();
   } catch (e) {
-    if (__DEV__) console.warn('[Ads] interstitial flow:', e?.message);
+    logAdError('[Ads] interstitial flow', e);
   }
 }

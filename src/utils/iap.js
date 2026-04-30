@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { SUBSCRIPTION_SKUS } from '../constants/subscription';
 
-const SKUS = [SUBSCRIPTION_SKUS.MONTHLY, SUBSCRIPTION_SKUS.YEARLY];
+const SKUS = [SUBSCRIPTION_SKUS.MONTHLY];
 let initDone = false;
 let initFailed = false;
 

@@ -8,10 +8,7 @@ import ScreenContainer from '../components/ScreenContainer';
 import AppText from '../components/AppText';
 import { AppButton, PremiumChip, ScreenHeader, SectionCard } from '../components/ui';
 
-// Not: Bu projede asset isimleri ters görünüyor:
-// - `siyahlogo.png` içeriği beyaz
-// - `beyazlogo.png` içeriği koyu
-// Bu yüzden dark modda siyahlogo, light modda beyazlogo kullanıyoruz.
+
 const LOGO_ON_DARK = require('../../assets/siyahlogo.png');
 const LOGO_ON_LIGHT = require('../../assets/beyazlogo.png');
 

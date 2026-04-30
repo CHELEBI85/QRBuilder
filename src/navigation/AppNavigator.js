@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import TabScreenAdFooter from '../components/TabScreenAdFooter';
 
 import HomeScreen from '../screens/HomeScreen';
 import CreateScreen from '../screens/CreateScreen';
@@ -14,7 +15,6 @@ import HistoryScreen from '../screens/HistoryScreen';
 import ScannerScreen from '../screens/ScannerScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import PaywallScreen from '../screens/PaywallScreen';
-import TabScreenAdFooter from '../components/TabScreenAdFooter';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -59,13 +59,14 @@ function CreateStack() {
 }
 
 function MainTabBar(props) {
+  const { theme } = useTheme();
   const current = props.state.routes[props.state.index];
   const routeName = current?.name;
   if (routeName === 'ScannerTab') {
     return null;
   }
   return (
-    <View>
+    <View style={{ backgroundColor: theme.tabBar }}>
       <TabScreenAdFooter />
       <BottomTabBar {...props} />
     </View>
@@ -77,8 +78,8 @@ export default function AppNavigator() {
   const insets = useSafeAreaInsets();
 
   // Tab bar content height + device bottom inset (gesture bar / home indicator)
-  const tabBarHeight = 56 + insets.bottom;
-  const tabBarBottomPad = insets.bottom > 0 ? insets.bottom : 8;
+  const tabBarHeight = 58 + Math.max(insets.bottom, 8);
+  const tabBarBottomPad = Math.max(insets.bottom, 8);
 
   return (
     <NavigationContainer>
@@ -91,6 +92,7 @@ export default function AppNavigator() {
             backgroundColor: theme.tabBar,
             borderTopColor: theme.tabBarBorder,
             borderTopWidth: 1,
+            position: 'relative',
             height: tabBarHeight,
             paddingTop: 8,
             paddingBottom: tabBarBottomPad,

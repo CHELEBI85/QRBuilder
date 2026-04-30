@@ -1,18 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Switch, StyleSheet, TouchableOpacity, Linking, Alert, Image } from 'react-native';
-import Slider from '@react-native-community/slider';
+import React from 'react';
+import { View, Switch, StyleSheet, Linking, Alert, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { getPreferences, savePreferences } from '../utils/preferences';
 import ScreenContainer from '../components/ScreenContainer';
 import AppText from '../components/AppText';
-import { ColorSwatch, PreviewCard, ScreenHeader, SectionCard, SettingRow, UpgradeCard } from '../components/ui';
-
-const COLOR_PRESETS = ['#000000', '#6C63FF', '#FF6B6B', '#2D6A4F', '#0077B6', '#FFD93D'];
-const BG_PRESETS = ['#FFFFFF', '#1A1A2E', '#F5F5F8', '#FFF8E7', '#E8F4FD', '#0F0F1A'];
+import { ScreenHeader, SectionCard, SettingRow, UpgradeCard } from '../components/ui';
 
 const APP_VERSION = Constants.expoConfig?.version ?? Constants.manifest?.version ?? '1.0.0';
 const LOGO_DARK = require('../../assets/siyahlogo.png');
@@ -21,25 +15,13 @@ const LOGO_LIGHT = require('../../assets/beyazlogo.png');
 export default function SettingsScreen({ navigation }) {
   const { theme, isDark, toggleTheme } = useTheme();
   const { isPremium } = useSubscription();
-  const [prefs, setPrefs] = useState({ defaultFgColor: '#000000', defaultBgColor: '#FFFFFF', defaultQrSize: 220 });
-
-  useEffect(() => {
-    getPreferences().then(setPrefs);
-  }, []);
-
-  const updatePref = async (key, value) => {
-    const updated = { ...prefs, [key]: value };
-    setPrefs(updated);
-    await savePreferences({ [key]: value });
-    Haptics.selectionAsync();
-  };
 
   const goToPaywall = () => {
     navigation.navigate('CreateTab', { screen: 'Paywall' });
   };
 
   const openFeedbackMail = () => {
-    const email = "mobiflextech@gmail.com";
+    const email = "support@applobby.co";
     const subject = encodeURIComponent("QRBuilder Geri Bildirim");
     const body = encodeURIComponent("Görüşlerinizi buraya yazabilirsiniz...");
   
@@ -109,73 +91,6 @@ export default function SettingsScreen({ navigation }) {
             />
           }
         />
-      </SectionCard>
-
-      <SectionCard padding="lg" style={sectionGap}>
-        <AppText variant="sectionLabel" tone="secondary" style={styles.sectionLabelSpacing}>
-          VARSAYILAN QR
-        </AppText>
-        <AppText variant="caption" tone="tertiary" style={styles.prefHint}>
-          Yeni QR oluştururken önizleme ve dışa aktarma bu renk ve boyutla başlar.
-        </AppText>
-
-        <AppText variant="subbody" tone="secondary" style={styles.prefLabel}>
-          Ön plan rengi
-        </AppText>
-        <View style={[styles.colorRow, { gap: theme.spacing.sm, marginBottom: theme.spacing.lg }]}>
-          {COLOR_PRESETS.map((c) => (
-            <ColorSwatch
-              key={c}
-              color={c}
-              selected={prefs.defaultFgColor === c}
-              onPress={() => updatePref('defaultFgColor', c)}
-              accessibilityLabel={`Ön plan rengi ${c}`}
-            />
-          ))}
-        </View>
-
-        <AppText variant="subbody" tone="secondary" style={styles.prefLabel}>
-          Arka plan rengi
-        </AppText>
-        <View style={[styles.colorRow, { gap: theme.spacing.sm, marginBottom: theme.spacing.lg }]}>
-          {BG_PRESETS.map((c) => (
-            <ColorSwatch
-              key={c}
-              color={c}
-              selected={prefs.defaultBgColor === c}
-              onPress={() => updatePref('defaultBgColor', c)}
-              accessibilityLabel={`Arka plan rengi ${c}`}
-            />
-          ))}
-        </View>
-
-        <View style={styles.sizeLabelRow}>
-          <AppText variant="subbody" tone="secondary" style={styles.prefLabel}>
-            Varsayılan boyut
-          </AppText>
-          <View style={[styles.sizePill, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border, borderRadius: theme.radius.pill }]}>
-            <AppText variant="caption" tone="secondary" style={styles.sizePillText}>
-              {prefs.defaultQrSize}px
-            </AppText>
-          </View>
-        </View>
-        <Slider
-          style={styles.slider}
-          minimumValue={150}
-          maximumValue={300}
-          step={10}
-          value={prefs.defaultQrSize}
-          onValueChange={(v) => setPrefs((p) => ({ ...p, defaultQrSize: v }))}
-          onSlidingComplete={(v) => updatePref('defaultQrSize', v)}
-          minimumTrackTintColor={theme.primary}
-          maximumTrackTintColor={theme.border}
-          thumbTintColor={theme.primary}
-          accessibilityLabel="Varsayılan QR boyutu"
-        />
-
-        <View style={{ marginTop: theme.spacing.sm }}>
-          <PreviewCard fgColor={prefs.defaultFgColor} bgColor={prefs.defaultBgColor} sizePx={prefs.defaultQrSize} />
-        </View>
       </SectionCard>
 
       <SectionCard padding="lg" style={sectionGap}>

@@ -12,6 +12,7 @@ const BENEFITS = [
   { icon: 'share', title: 'Sosyal medya', desc: 'WhatsApp, Instagram, X, YouTube.' },
   { icon: 'location-on', title: 'Konum', desc: 'GPS koordinatlarını hızlıca gönder.' },
   { icon: 'all-inclusive', title: 'Sınırsız', desc: 'Tek abonelikle sınırsız oluştur.' },
+  { icon: 'block', title: 'Reklamsız', desc: 'Premium’da reklam gösterilmez.' },
 ];
 
 export default function BenefitList({ style }) {

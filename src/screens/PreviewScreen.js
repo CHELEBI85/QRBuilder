@@ -26,12 +26,12 @@ import AppCard from '../components/AppCard';
 import { AppButton, SectionCard } from '../components/ui';
 import { saveQRToHistory } from '../utils/storage';
 import { getPreferences } from '../utils/preferences';
+import { showInterstitialOnQrCreated } from '../utils/interstitialAds';
 import {
   ensureMediaLibrarySavePermission,
   savePngDataUrlToGallery,
   stripDataUrlToBase64Payload,
 } from '../utils/qrGalleryExport';
-import { recordQrExportSuccessAndMaybeShowInterstitial } from '../utils/interstitialAds';
 
 const COLOR_THEMES = [
   { label: 'Klasik', fg: '#000000', bg: '#FFFFFF' },
@@ -60,17 +60,24 @@ async function deleteTempFile(path) {
 export default function PreviewScreen({ route, navigation }) {
   const { qrType, formData, qrValue } = route.params;
   const { theme } = useTheme();
-  const { isPremium } = useSubscription();
+  const { isPremium, loading: subscriptionLoading } = useSubscription();
   const svgRef = useRef(null);
   const mountedRef = useRef(true);
-  /** Aynı önizleme ekranında galeri+geçmiş iki kez sayılmasın */
-  const interstitialCountSessionRef = useRef(false);
+  const interstitialShown = useRef(false);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  // QR oluşturulduğunda interstitial göster (abonelik yüklenince, 1.5s gecikmeyle)
+  useEffect(() => {
+    if (subscriptionLoading || interstitialShown.current) return;
+    interstitialShown.current = true;
+    const t = setTimeout(() => showInterstitialOnQrCreated({ isPremium }), 1500);
+    return () => clearTimeout(t);
+  }, [subscriptionLoading, isPremium]);
 
   const setSvgRef = useCallback((ref) => {
     svgRef.current = ref;
@@ -95,12 +102,6 @@ export default function PreviewScreen({ route, navigation }) {
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
-  };
-
-  const onQrPersistedForAds = () => {
-    if (interstitialCountSessionRef.current) return;
-    interstitialCountSessionRef.current = true;
-    void recordQrExportSuccessAndMaybeShowInterstitial({ isPremium });
   };
 
   const openColorPicker = (target) => {
@@ -192,7 +193,6 @@ export default function PreviewScreen({ route, navigation }) {
         await savePngDataUrlToGallery(data, qrType.id);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (mountedRef.current) showToast('QR kod galeriye kaydedildi.', 'success');
-        onQrPersistedForAds();
       } catch (e) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         console.warn('[saveToGallery]', e);
